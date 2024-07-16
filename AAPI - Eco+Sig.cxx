@@ -38,8 +38,9 @@ unordered_map<int, int> eco_flg; // what is this used for? flag for eco-driving?
 
 ifstream ecodrive;
 ifstream sigopt;
+fstream fecotraj_output;
 int lnk_eco, lnk_ctl[100][4]; // lnk_ctl why [100][4]?
-int nsig, sig_ctl[100][2], ph_lnk[200][8], sig_sec[100][4];
+int nsig, sig_ctl[100][2], ph_lnk[200][8], sig_sec[100][4], lan_ctl[100][4];
 double sigtim[4], sigmin[4];
 unordered_map<int, int> sig_lnk; // identify the links associated with the signal optimizaiton system
 unordered_map<int, int> sig_flg;
@@ -159,14 +160,14 @@ void SigPhLnk(double ctim) {
 			for (int k = 0; k < grp_trn; k++) {
 				ECIGetFromToofTurningofSignalGroup(nsig, j + 1, k, &sec_fm, &sec_to);
 				for (int m = 0; m < nturn; m++) {
-					A2KTurnInf turn_inf = AKIInfNetGetTurnInfo(sigid, j);
+					A2KTurnInf turn_inf = AKIInfNetGetTurnInfo(sigid, m);
 					turn_org = turn_inf.originSectionId;
 					turn_dst = turn_inf.destinationSectionId;
 					if (turn_org == sec_fm && turn_dst == sec_to) {
 						if (sig_lnk[turn_org] == 0) {
 							sig_lnk[turn_org] = lnk_order;
 							for (int k = turn_inf.originFromLane; k <= turn_inf.originToLane; k++) {
-								lnk_ctl[lnk_order][k] = j;
+								lan_ctl[lnk_order][k] = j;
 							}
 							lnk_order++;
 						}
@@ -209,6 +210,9 @@ int AAPIInit()
 
 	// update the link and phase information
 	SigPhLnk(0);
+
+	// save the trajectories for eco-driving vehicles
+	fecotraj_output.open("Eco_Traj.txt", fstream::out);
 
 	return 0;
 }
@@ -299,7 +303,7 @@ int EcoDriveFunc(double d2t, double d2a, double ttg, double spd_cur, double spd_
 
 
 double SigDelay(int sigid, int Step, double dt) {	// estimate the total delay of each possible timing plan in the next Step*dt seconds
-	int link_id, vlan, ph;
+	int link_id, vlan, ph, lnk_order;
 	int n = sig_flg[sigid];
 	double tg, tr, flw_in, flw_out;
 	int nph = ECIGetNumberPhases(sigid);
@@ -316,15 +320,16 @@ double SigDelay(int sigid, int Step, double dt) {	// estimate the total delay of
 			for (int k = 0; k < nbveh; k++) {
 				InfVeh vehinf = AKIVehStateGetVehicleInfSection(link_id, k);
 				vlan = vehinf.numberLane;
-				ph = lnk_ctl[link_id][vlan];
+				// ph = lan_ctl[link_id][vlan];
 				del_tot += (ctim - vehinf.SectionEntranceT) - (secinf.length - vehinf.distance2End) / (secinf.speedLimit / 3.6);		// update the delay of each vehicle, summarized in each lane
 			}
 
 			// find the perspective delay of all phases
-			for (int j = 0; j < secinf.nbCentralLanes; j++) {
+			for (int j = 0; j < secinf.nbCentralLanes + secinf.nbSideLanes; j++) {
 				StructAkiEstadSectionLane secstat = AKIEstGetCurrentStatisticsSectionLane(link_id, j, 0);
 				flw_lan = secstat.Flow;
-				ph = lnk_ctl[link_id][j];
+				lnk_order = sig_lnk[link_id];
+				ph = lan_ctl[lnk_order][j];
 				if (ph == 0) {
 					tg = 0; 
 					tr = sigtim[ph];
@@ -337,7 +342,7 @@ double SigDelay(int sigid, int Step, double dt) {	// estimate the total delay of
 				for (int t = 0; t<int(Step * dt); t++) {
 					flw_in += flw_lan / 3600;		//cumulative in-flow rate in veh
 					if (t > tg && t < tr) {
-						flw_out += secinf.capacity / secinf.nbCentralLanes / 3600;
+						flw_out += secinf.capacity / (secinf.nbCentralLanes + secinf.nbSideLanes) / 3600;
 						if (flw_out >= flw_in) flw_out = flw_in;
 					}
 					del_tot += flw_in - flw_out;	// find the total delay of the phase ph
@@ -458,11 +463,14 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) //
 {
 	int offset, sig_cycle, ph_cur, ph_veh = 2, sig_id = 5287; // ph_veh=2 means only control phase 2? but why the ecodrive file has two phases? may have error without initialization
 	int cav_typ = 5380, vn_lan[6]; // vn_lan represents the total number of vehicles in each lane of the controlled section
-	double ttg, ttg0, ttr, ph_start, tstep = 0.8; // why tstep = 0.8 not 1.0?
+	double ttg, ttg0, ttg1, dtg1, ttr, ph_start, tstep = 0.8; // why tstep = 0.8 not 1.0?
 	double max, min, dur;
 	double spd_opt = 100, acc_opt1 = 0, acc_opt2 = 3.0, spd_wave, spd_pre[7];
+	double ta_lan[6], t0_lan[6], flw_lan[6];
 	double vlen = 5.0, d2t, d2a; // what is vlen, d2t: distance to the end of the queue, d2a: distance to accelerate to the end of the acceleration zone
 	double simtime = AKIGetCurrentSimulationTime();
+	int flg_input = 1;		// 0 for accurate queue length estimation, 1 for traffic flow-based queue length estimation
+	int lnk_order = 0, flg_lane = 0;		// flag to indicate whether a vehicle is staying on a right lane to make turn
 
 	int Step = 12;
 	double dt = 5.0;
@@ -482,12 +490,24 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) //
 			for (int l = 0; l < 6; l++) {
 				vn_lan[l] = 0;		// initialize the number of vehicles in each lane as 0
 									// the number of lanes at each control section is 3, there are two control sections
+				ta_lan[l] = 0;
+				t0_lan[l] = 0;
+				flw_lan[l] = 0;
 			}
+			lnk_order = sig_lnk[secid];
 			int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
 			for (int k = 0; k < nbveh; k++) {
 				InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
-				if (vn_lan[vehinf.numberLane - 1] == 0) spd_pre[vehinf.numberLane - 1] = secinf.speedLimit;
+				if (vn_lan[vehinf.numberLane - 1] == 0) {
+					spd_pre[vehinf.numberLane - 1] = secinf.speedLimit;
+					t0_lan[vehinf.numberLane - 1] = vehinf.SectionEntranceT;
+				}
+				ta_lan[vehinf.numberLane - 1] = vehinf.SectionEntranceT;
 				vn_lan[vehinf.numberLane - 1]++; // indicate which lane the vehicle is located and accumulate the number of vehicles in that lane
+				if (vn_lan[vehinf.numberLane - 1] > 1) {
+					flw_lan[vehinf.numberLane - 1] = (double(vn_lan[vehinf.numberLane - 1]) - 1) / (ta_lan[vehinf.numberLane - 1] - t0_lan[vehinf.numberLane - 1]) * 3600;    // in flow rate at vph
+				}
+
 				int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
 
 				if (type_id == cav_typ) {		// eco-driving only applied to CAVs
@@ -499,6 +519,9 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) //
 							break;
 						}
 					}
+					int ph_lan = lan_ctl[lnk_order][vehinf.numberLane];			// phase of current lane
+					if (ph_lan != ph_veh) flg_lane = 1;							// the vehicle stay at a wrong lane of its expected phase
+
 					// find the current status and the time to green or time to red
 					offset = ECIGetOffset(sig_id); // not used?
 					sig_cycle = ECIGetControlCycleofJunction(0, sig_id);
@@ -536,7 +559,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) //
 					}
 
 					// apply eco-driving for the CAV
-					// only apply it when the current phase is red
+					// apply it when the current phase is red first
 					// when the current phase is green but vehicle cannot get through the junction if not speeding?
 					if (ph_veh != ph_cur) {
 						AKIVehSetAsTracked(vehinf.idVeh);
@@ -545,25 +568,51 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) //
 
 						// control the speed of CVs
 						spd_opt = vehinf.CurrentSpeed;
-						d2t = vehinf.distance2End - (vn_lan[vehinf.numberLane - 1] - 1) * vlen;		// what does this mean? why (vn_lan[vehinf.numberLane - 1] * vlen)? ((vn_lan[vehinf.numberLane - 1]-1) might get negative values.
-						ttg0 = ttg + (vn_lan[vehinf.numberLane - 1] - 1) * vlen / (spd_wave / 3.6);		// time until the queue is released
-						d2a = (vn_lan[vehinf.numberLane - 1] * vlen) + 100;
+						if (flg_input == 0) {
+							d2t = vehinf.distance2End - (vn_lan[vehinf.numberLane - 1] - 1) * vlen;		// what does this mean? why (vn_lan[vehinf.numberLane - 1] * vlen)? ((vn_lan[vehinf.numberLane - 1]-1) might get negative values.
+							ttg0 = ttg + (vn_lan[vehinf.numberLane - 1] - 1) * vlen / (spd_wave / 3.6);		// time until the queue is released
+							d2a = (vn_lan[vehinf.numberLane - 1] * vlen) + 100;
+						}
+						else { // update the input of eco-driving for traffic flow-based queue
+							ttg1 = (sig_cycle - ph_dur[ph_cur - 1]) - ttg;
+							ttg1 += vehinf.distance2End / (secinf.speedLimit / 3.6);
+							d2t = flw_lan[vehinf.numberLane - 1] * ttg1 / 3600 * vlen;
+							ttg0 = ttg + d2t / (spd_wave / 3.6);
+							d2a = d2t + 100;
+							d2t = vehinf.distance2End - d2t;
+						}
+						
 						if (d2t > 0) {
 							int flag = EcoDriveFunc(d2t, d2a, ttg0, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt, acc_opt1, acc_opt2);
 							if (flag > 0) {
 								//if (spd_opt < vehinf.CurrentSpeed) AKIVehTrackedForceSpeed(vehinf.idVeh, vehinf.CurrentSpeed - acc_opt * tstep * 3.6);
 								if (spd_opt < vehinf.CurrentSpeed - acc_opt1 * tstep * 3.6) spd_opt = vehinf.CurrentSpeed - acc_opt1 * tstep * 3.6; // why >= 
-								AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt);
+								if (flg_lane == 0) AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt);			// if a CAV is on a wrong lane, then we do not apply eco-driving. Instead, we ask the vehicle to move as fast as possible to get to its correct lane.
 							}
 							if (secid == 1249 && ph_veh == 2) AKIPrintString(("Control Indicator: " + to_string(vehinf.CurrentSpeed) + ", phase = " + to_string(flag) + ", Speed = " + to_string(spd_opt) + ", Acc = " + to_string(acc_opt1) + ", distance = " + to_string(vehinf.distance2End) + ", TTG = " + to_string(ttg)).c_str());
 						}
 					}
 					else { // deal with the situation with queue at green light
 						if (spd_pre[vehinf.numberLane - 1] < 1.0) { // the previous vehicle is in the queue
-							ttg0 = (vn_lan[vehinf.numberLane - 1] - 1) * vlen / (spd_wave / 3.6);
-							ttg0 = ttg0 - (ph_dur[ph_cur - 1] - ttr);
-							d2t = vehinf.distance2End - (vn_lan[vehinf.numberLane - 1] - 1) * vlen;
-							d2a = (vn_lan[vehinf.numberLane - 1] * vlen) + 100;
+							ttg1 = ph_dur[ph_cur - 1] - ttr;
+							dtg1 = secinf.capacity / secinf.nbCentralLanes * ttg1 / 3600; // number of vehicles already departed
+							dtg1 += (vn_lan[vehinf.numberLane - 1] - 1);		// number of vehicles before the ego-car, i.e., in the queue
+
+							if (flg_input == 0) {
+								ttg0 = dtg1 * vlen / (spd_wave / 3.6);
+								ttg0 = ttg0 - (ph_dur[ph_cur - 1] - ttr);
+								d2t = vehinf.distance2End - dtg1 * vlen;
+								d2a = (dtg1 * vlen) + 100;
+							}
+							else {
+								ttg1 = sig_cycle - ttg;
+								ttg1 += vehinf.distance2End / (secinf.speedLimit / 3.6);
+								d2t = flw_lan[vehinf.numberLane - 1] * ttg1 / 3600 * vlen;
+								ttg0 = d2t / (spd_wave / 3.6);
+								ttg0 = ttg0 - (ph_dur[ph_cur - 1] - ttr);
+								d2a = d2t + 100;
+								d2t = vehinf.distance2End - d2t;
+							}
 							if (d2t > 0) {
 								int flag = EcoDriveFunc(d2t, d2a, ttg0, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt, acc_opt1, acc_opt2);
 								if (flag > 0) {
@@ -577,6 +626,9 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) //
 				}
 
 				spd_pre[vehinf.numberLane - 1] = vehinf.CurrentSpeed;
+
+				// save eco-driving vehicle trajectory: time, section ID, vehicle type, lane ID, vehicle ID, distance to signal, current speed
+				fecotraj_output << simtime << "\t" << secid << "\t" << type_id << "\t" << vehinf.numberLane << "\t" << vehinf.idVeh << "\t" << vehinf.distance2End << "\t" << vehinf.CurrentSpeed << std::endl;
 			}
 		}
 	}
@@ -593,6 +645,7 @@ int AAPIPostManage(double time, double timeSta, double timTrans, double acicle)
 int AAPIFinish()
 {
 	//AKIPrintString("\tFinish");
+	fecotraj_output.close();
 
 	return 0;
 }
