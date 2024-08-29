@@ -1,0 +1,13 @@
+﻿cl : command line  warning D9035: option 'Gm' has been deprecated and will be removed in a future release
+  AAPI.cxx
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(71,24): warning C4101: 'P_b': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(71,29): warning C4101: 'P_f': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(67,73): warning C4101: 'FC_hev': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(159,6): warning C4101: 'ngrp': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(160,6): warning C4101: 'grp_id': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(397,6): warning C4101: 'ngrp': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(397,12): warning C4101: 'nturn': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(573,27): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\Microsoft.CppBuild.targets(1389,5): warning MSB8012: TargetPath(D:\projects\eco-driving_powertrainOpt\x64\Debug\AAPI.dll) does not match the Linker's OutputFile property value (D:\projects\eco-driving_powertrainOpt\AAPI_D.dll). This may cause your project to build incorrectly. To correct this, please make sure that $(OutDir), $(TargetName) and $(TargetExt) property values match the value specified in %(Link.OutputFile).
+C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\Microsoft.CppBuild.targets(1391,5): warning MSB8012: TargetName(AAPI) does not match the Linker's OutputFile property value (AAPI_D). This may cause your project to build incorrectly. To correct this, please make sure that $(OutDir), $(TargetName) and $(TargetExt) property values match the value specified in %(Link.OutputFile).
+  AAPI.vcxproj -> D:\projects\eco-driving_powertrainOpt\x64\Debug\AAPI.dll
