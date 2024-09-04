@@ -519,9 +519,35 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 
 	int scenario_id = ANGConnGetScenarioId();
 	void* control_strategy_pointer = ANGConnGetAttribute(AKIConvertFromAsciiString("GKScenario::driveControlStrategy"));
-	string control_method;
 	bool anyNonAsciiChar;
 	string control_method = string(AKIConvertToAsciiString(ANGConnGetAttributeValueString(control_strategy_pointer, scenario_id), false, &anyNonAsciiChar));
+
+	if (control_method == control_strategy[0]) {
+		int sec_from = 0;
+		int numDownstreamSections = 2;
+
+		for (int j = 0; j < lnk_eco; j++) {
+			if (int(j % numDownstreamSections) == 0) {
+				sec_from = lnk_ctl[j][0];
+				int nbveh_upstream_section = AKIVehStateGetNbVehiclesSection(sec_from, true);
+				for (int veh_num = 0; veh_num < nbveh_upstream_section; veh_num++) {
+					InfVeh vehinf_upstream = AKIVehStateGetVehicleInfSection(sec_from, veh_num);
+					int type_id_upstream = AKIVehTypeGetIdVehTypeANG(vehinf_upstream.type);
+					fecotraj_output << simtime << "\t" << sec_from << "\t" << type_id_upstream << "\t" << vehinf_upstream.numberLane << "\t" << vehinf_upstream.idVeh << "\t" << vehinf_upstream.distance2End
+						<< "\t" << vehinf_upstream.CurrentSpeed << std::endl;
+				}
+			}
+			int sec_to = lnk_ctl[j][1];
+			int nbveh_downstream_section = AKIVehStateGetNbVehiclesSection(sec_to, true);
+			
+			for (int veh_num = 0; veh_num < nbveh_downstream_section; veh_num++) {
+				InfVeh vehinf_downstream = AKIVehStateGetVehicleInfSection(sec_to, veh_num);
+				int type_id_downstream = AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type);
+				fecotraj_output << simtime << "\t" << sec_to << "\t" << type_id_downstream << "\t" << vehinf_downstream.numberLane << "\t" << vehinf_downstream.idVeh << "\t" << vehinf_downstream.CurrentPos
+					<< "\t" << vehinf_downstream.CurrentSpeed << std::endl;
+			}
+		}
+	}
 
 	if (control_method == control_strategy[3]) {
 		// update the optimal timing plan at every Step*dt seconds
@@ -530,6 +556,21 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 		}
 
 		//update for eco-driving
+		
+		////////////////////////////
+			// output vehicle trajectory in downwtream sections of the control section
+		for (int j = 0; j < lnk_eco; j++) {
+			int sec_to = lnk_ctl[j][1];
+			int nbveh_downstream_section = AKIVehStateGetNbVehiclesSection(sec_to, true);
+			for (int veh_num = 0; veh_num < nbveh_downstream_section; veh_num++) {
+				InfVeh vehinf_downstream = AKIVehStateGetVehicleInfSection(sec_to, veh_num);
+				int type_id_downstream = AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type);
+				fecotraj_output << simtime << "\t" << sec_to << "\t" << type_id_downstream << "\t" << vehinf_downstream.numberLane << "\t" << vehinf_downstream.idVeh << "\t" << vehinf_downstream.CurrentPos
+					<< "\t" << vehinf_downstream.CurrentSpeed << std::endl;
+			}
+		}
+		//////////////////////////
+
 		int secnb = AKIInfNetNbSectionsANG();
 		for (int i = 0; i < secnb; i++) {
 			int secid = AKIInfNetGetSectionANGId(i);
@@ -537,19 +578,6 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 			spd_wave = secinf.capacity / (200 - secinf.capacity / secinf.speedLimit);		// calculate the rarefaction wave speed	
 			// StructAkiEstadSection sec_stat = AKIEstGetCurrentStatisticsSection(secid, 0);   // not used?
 
-			////////////////////////////
-			// output vehicle trajectory in downwtream sections of the control section
-			for (int j = 0; j < lnk_eco; j++) {
-				int sec_to = lnk_ctl[j][1];
-				int nbveh_downstream_section = AKIVehStateGetNbVehiclesSection(sec_to, true);
-				for (int veh_num = 0; veh_num < nbveh_downstream_section; veh_num++) {
-					InfVeh vehinf_downstream = AKIVehStateGetVehicleInfSection(sec_to, veh_num);
-					int type_id_downstream = AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type);
-					fecotraj_output << simtime << "\t" << sec_to << "\t" << type_id_downstream << "\t" << vehinf_downstream.numberLane << "\t" << vehinf_downstream.idVeh << "\t" << vehinf_downstream.CurrentPos
-						<< "\t" << vehinf_downstream.CurrentSpeed << std::endl;
-				}
-			}
-			//////////////////////////
 			if (eco_flg[secid] == 1) {
 				for (int l = 0; l < 6; l++) {
 					vn_lan[l] = 0;		// initialize the number of vehicles in each lane as 0
@@ -574,7 +602,8 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 					if (vn_lan[vehinf.numberLane - 1] > 1) {
 						flw_lan[vehinf.numberLane - 1] = (double(vn_lan[vehinf.numberLane - 1]) - 1) / (ta_lan[vehinf.numberLane - 1] - t0_lan[vehinf.numberLane - 1]) * 3600;    // in flow rate at vph
 					}
-
+					
+					//AKIVehTrackedModifyLane(vehinf.idVeh, 0);			// does not allow lane changing in the control section
 					int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
 
 					if (type_id == cav_typ) {		// eco-driving only applied to CAVs
@@ -584,7 +613,6 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 								ph_veh = lnk_ctl[j][2];  // the phase that would be controlled
 								sig_id = lnk_ctl[j][3];  // control signal ID
 								AKIPrintString(("section_id is: " + to_string(lnk_ctl[j][0]) + " ph_veh is: " + to_string(lnk_ctl[j][2]) + " eco_flg is: " + to_string(eco_flg[secid])).c_str());
-
 								break;
 							}
 						}
@@ -656,7 +684,10 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 								if (flag > 0) {
 									//if (spd_opt < vehinf.CurrentSpeed) AKIVehTrackedForceSpeed(vehinf.idVeh, vehinf.CurrentSpeed - acc_opt * tstep * 3.6);
 									if (spd_opt < vehinf.CurrentSpeed - acc_opt1 * tstep * 3.6) spd_opt = vehinf.CurrentSpeed - acc_opt1 * tstep * 3.6;
-									if (flg_lane == 0) AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt);			// if a CAV is on a wrong lane, then we do not apply eco-driving. We do not control anything to this vehicle 
+									
+									if (flg_lane == 0) {
+										AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt);			// if a CAV is on a wrong lane, then we do not apply eco-driving. We do not control anything to this vehicle 
+									}
 								}
 								// the code is just used to verify if results are correct
 								if (secid == 1249 && ph_veh == 2)
@@ -688,9 +719,10 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 								if (d2t > 0) {
 									int flag = EcoDriveFunc(d2t, d2a, ttg0, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt, acc_opt1, acc_opt2);
 									if (flag > 0) {
-										//if (spd_opt < vehinf.CurrentSpeed) AKIVehTrackedForceSpeed(vehinf.idVeh, vehinf.CurrentSpeed - acc_opt * tstep * 3.6);
 										if (spd_opt < vehinf.CurrentSpeed - acc_opt1 * tstep * 3.6) spd_opt = vehinf.CurrentSpeed - acc_opt1 * tstep * 3.6; // Ensure the speed to which we decelerate next second greater than the final cruise speed, otherwise cruise instead of decelerating
-										if (flg_lane == 0) AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt);
+										if (flg_lane == 0) {
+											AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt);
+										}
 									}
 								}
 							}

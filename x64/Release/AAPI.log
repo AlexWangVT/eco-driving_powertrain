@@ -1,12 +1,12 @@
 ﻿  AAPI.cxx
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(71,24): warning C4101: 'P_b': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(71,29): warning C4101: 'P_f': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(67,73): warning C4101: 'FC_hev': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(159,6): warning C4101: 'ngrp': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(160,6): warning C4101: 'grp_id': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(398,6): warning C4101: 'ngrp': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(398,12): warning C4101: 'nturn': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(584,27): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(72,24): warning C4101: 'P_b': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(72,29): warning C4101: 'P_f': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(68,73): warning C4101: 'FC_hev': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(160,6): warning C4101: 'ngrp': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(161,6): warning C4101: 'grp_id': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(399,6): warning C4101: 'ngrp': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(399,12): warning C4101: 'nturn': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(623,28): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
 C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\Microsoft.CppBuild.targets(1392,5): warning MSB8012: TargetPath(D:\projects\eco-driving_powertrainOpt\x64\Release\AAPI.dll) does not match the Linker's OutputFile property value (D:\projects\eco-driving_powertrainOpt\AAPI_R.dll). This may cause your project to build incorrectly. To correct this, please make sure that $(OutDir), $(TargetName) and $(TargetExt) property values match the value specified in %(Link.OutputFile).
 C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\Microsoft.CppBuild.targets(1394,5): warning MSB8012: TargetName(AAPI) does not match the Linker's OutputFile property value (AAPI_R). This may cause your project to build incorrectly. To correct this, please make sure that $(OutDir), $(TargetName) and $(TargetExt) property values match the value specified in %(Link.OutputFile).
      Creating library .\Release/AAPI_R.lib and object .\Release/AAPI_R.exp
