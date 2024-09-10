@@ -49,6 +49,18 @@ unordered_map<int, int> sig_lnk; // identify the links associated with the signa
 unordered_map<int, int> sig_flg;
 string control_strategy[4] = {"No_control", "Signal_optimization_only", "Eco-Driving_only", "Proposed_control"};
 
+// scenario experiment logging definition
+int scenario_id = ANGConnGetScenarioId();
+int experiment_id = ANGConnGetExperimentId();
+void* control_strategy_pointer = ANGConnGetAttribute(AKIConvertFromAsciiString("GKScenario::driveControlStrategy"));
+void* experiment_demand_pointer = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::demand_percentage"));
+void* experiment_CAV_MPR_pointer = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::cav_penetration"));
+bool anyNonAsciiChar;
+string control_method = string(AKIConvertToAsciiString(ANGConnGetAttributeValueString(control_strategy_pointer, scenario_id), false, &anyNonAsciiChar));
+int demand_percentage = ANGConnGetAttributeValueInt(experiment_demand_pointer, experiment_id);
+int cav_penetration = ANGConnGetAttributeValueInt(experiment_CAV_MPR_pointer, experiment_id);
+
+
 void printDebugLog(string s);
 
 void printDebugLog(string s) {
@@ -91,10 +103,6 @@ void Emission(double spd, double grade, double acc, double& E_i, double& E_e, do
 		eng[1] = eng[1] * eta_rb;
 	}
 	eng[1] = eng[1] / 3600; // unit conversion 
-
-	// another try for VT-CPFM model
-	//eng[0] = a0;
-	//if (P_w > 0) eng[0] = a0 + a1 * P_w / 1000 + a2 * pow(P_w / 1000, 2); // why another try?
 
 
 	// PHEV energy model
@@ -242,8 +250,13 @@ int AAPIInit()
 	// update the link and phase information
 	SigPhLnk(0);
 
-	// save the trajectories for eco-driving vehicles
-	fecotraj_output.open("Eco_Traj.txt", fstream::out);
+	// save output to specified path
+	AKIPrintString((to_string(experiment_id)).c_str());
+	AKIPrintString(("demand percent is : " + to_string(demand_percentage)).c_str());
+	AKIPrintString(("CAV percent is: " + to_string(cav_penetration)).c_str());
+	string output_path;
+	output_path = "results\\" + control_method + "_" + to_string(demand_percentage) + "_" + to_string(cav_penetration) + ".csv";
+	fecotraj_output.open(output_path, fstream::out);
 	fecotraj_output << "simulation_time" << "\t" << "section_id" << "\t" << "veh_type_id" << "\t" << "numberLane" << "\t" 
 		<< "vehicle_id" << "\t" << "distance2End" << "\t" << "CurrentSpeed" << std::endl;
 
@@ -500,7 +513,7 @@ void SigOptFunc(double timeSta, int Step, double dt) {	// search for the optimal
 	}
 }
 
-void trajectory_output(double simtime, string control_method, int sec_from, int numDownstreamSections) {
+void withoutEcodrive_trajectory_output(double simtime, string control_method, int sec_from, int numDownstreamSections) {
 	for (int j = 0; j < lnk_eco; j++) {
 		if (int(j % numDownstreamSections) == 0 && (control_method == control_strategy[0] || control_method == control_strategy[1])) {
 			sec_from = lnk_ctl[j][0];
@@ -510,7 +523,7 @@ void trajectory_output(double simtime, string control_method, int sec_from, int 
 				int type_id_upstream = AKIVehTypeGetIdVehTypeANG(vehinf_upstream.type);
 				fecotraj_output << simtime << "\t" << sec_from << "\t" << type_id_upstream << "\t" << vehinf_upstream.numberLane << "\t" << vehinf_upstream.idVeh << "\t" << vehinf_upstream.distance2End
 					<< "\t" << vehinf_upstream.CurrentSpeed << std::endl;
-			}
+			} 
 		}
 		int sec_to = lnk_ctl[j][1];
 		int nbveh_downstream_section = AKIVehStateGetNbVehiclesSection(sec_to, true);
@@ -522,7 +535,7 @@ void trajectory_output(double simtime, string control_method, int sec_from, int 
 				<< "\t" << vehinf_downstream.CurrentSpeed << std::endl;
 		}
 	}
-}
+} // this func used to output trajectory for control strategy "no control" and "signal opt", and trajectory of downstream section for strategies with ecodrive
 
 void ecoDriveControlSectionOutput() {
 	int offset_ecoDrive, sig_cycle_ecoDrive, ph_cur_ecoDrive, ph_veh_ecoDrive = 2, sig_id_ecoDrive = 5287; // ph_veh=2 means only control phase 2? but why the ecodrive file has two phases? may have error without initialization
@@ -705,7 +718,7 @@ void ecoDriveControlSectionOutput() {
 			}
 		}
 	}
-}
+}// this func used to develop eco-drive control and output trajectroy on control sections
 
 int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AAPI is the main function 
 {
@@ -730,20 +743,20 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 	string control_method = string(AKIConvertToAsciiString(ANGConnGetAttributeValueString(control_strategy_pointer, scenario_id), false, &anyNonAsciiChar));
 
 	if (control_method == control_strategy[0]) {  // no control
-		trajectory_output(simtime, control_method, sec_from, numDownstreamSections);
+		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections);
 	}
 
 	if (control_method == control_strategy[1]) {  // signal optimization only
 		if (int(simtime * 10) % int(Step * dt * 10) == 0) {
 			SigOptFunc(timeSta, Step, dt);
 		}
-		trajectory_output(simtime, control_method, sec_from, numDownstreamSections);
+		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections);
 	}
 
 	if (control_method == control_strategy[2]) {  // eco-driving only
 		// output vehicle trajectory in downwtream sections of the control section
 	
-		trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
+		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
 
 		// eco-driving 
 		ecoDriveControlSectionOutput();
@@ -757,7 +770,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 
 		// output vehicle trajectory in downwtream sections of the control section
 
-		trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
+		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
 
 		// eco-driving 
 		ecoDriveControlSectionOutput();
