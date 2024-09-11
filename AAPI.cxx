@@ -52,6 +52,7 @@ string control_strategy[4] = {"No_control", "Signal_optimization_only", "Eco-Dri
 // scenario experiment logging definition
 int scenario_id = ANGConnGetScenarioId();
 int experiment_id = ANGConnGetExperimentId();
+int repli_id = ANGConnGetReplicationId();
 void* control_strategy_pointer = ANGConnGetAttribute(AKIConvertFromAsciiString("GKScenario::driveControlStrategy"));
 void* experiment_demand_pointer = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::demand_percentage"));
 void* experiment_CAV_MPR_pointer = ANGConnGetAttribute(AKIConvertFromAsciiString("GKExperiment::cav_penetration"));
@@ -255,7 +256,8 @@ int AAPIInit()
 	AKIPrintString(("demand percent is : " + to_string(demand_percentage)).c_str());
 	AKIPrintString(("CAV percent is: " + to_string(cav_penetration)).c_str());
 	string output_path;
-	output_path = "results\\" + control_method + "_" + to_string(demand_percentage) + "_" + to_string(cav_penetration) + ".csv";
+	output_path = "results\\" + control_method + "_" + "demand" + to_string(demand_percentage) + "_" + "CAV" +
+		to_string(cav_penetration) + "_" + to_string(repli_id) + ".csv";
 	fecotraj_output.open(output_path, fstream::out);
 	fecotraj_output << "simulation_time" << "\t" << "section_id" << "\t" << "veh_type_id" << "\t" << "numberLane" << "\t" 
 		<< "vehicle_id" << "\t" << "distance2End" << "\t" << "CurrentSpeed" << std::endl;
