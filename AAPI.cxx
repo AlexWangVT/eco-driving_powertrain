@@ -16,7 +16,8 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-
+#include <algorithm>
+#include <vector>
 // Procedures could be modified by the user
 
 using namespace std;
@@ -61,8 +62,38 @@ string control_method = string(AKIConvertToAsciiString(ANGConnGetAttributeValueS
 int demand_percentage = ANGConnGetAttributeValueInt(experiment_demand_pointer, experiment_id);
 int cav_penetration = ANGConnGetAttributeValueInt(experiment_CAV_MPR_pointer, experiment_id);
 
+enum class VehicleType {
+	UNKNOWN = 0,
+	ICEV_CAV = 5380,
+	ICEV_NON_CAV = 154,
+	BEV_CAV = 5591,
+	BEV_NON_CAV = 5590,
+	HEV_CAV = 5596,
+	HEV_NON_CAV = 5597,
+	PHEV_CAV = 5592,
+	PHEV_NON_CAV = 5593,
+	HFCV_CAV = 5594,
+	HFCV_NON_CAV = 5595
+};
 
-void printDebugLog(string s);
+const VehicleType VEHICLE_TYPE_ICEV_CAV = VehicleType::ICEV_CAV;
+const VehicleType VEHICLE_TYPE_ICEV_NON_CAV = VehicleType::ICEV_NON_CAV;
+const VehicleType VEHICLE_TYPE_BEV_CAV = VehicleType::BEV_CAV;
+const VehicleType VEHICLE_TYPE_BEV_NON_CAV = VehicleType::BEV_NON_CAV;
+const VehicleType VEHICLE_TYPE_HEV_CAV = VehicleType::HEV_CAV;
+const VehicleType VEHICLE_TYPE_HEV_NON_CAV = VehicleType::HEV_NON_CAV;
+const VehicleType VEHICLE_TYPE_PHEV_CAV = VehicleType::PHEV_CAV;
+const VehicleType VEHICLE_TYPE_PHEV_NON_CAV = VehicleType::PHEV_NON_CAV;
+const VehicleType VEHICLE_TYPE_HFCV_CAV = VehicleType::HFCV_CAV;
+const VehicleType VEHICLE_TYPE_HFCV_NON_CAV = VehicleType::HFCV_NON_CAV;
+
+
+const vector<VehicleType>valid_vehicle_type_list{VEHICLE_TYPE_ICEV_CAV, VEHICLE_TYPE_ICEV_NON_CAV, VEHICLE_TYPE_BEV_CAV, VEHICLE_TYPE_BEV_NON_CAV,
+VEHICLE_TYPE_HEV_CAV, VEHICLE_TYPE_HEV_NON_CAV, VEHICLE_TYPE_PHEV_CAV, VEHICLE_TYPE_PHEV_NON_CAV, VEHICLE_TYPE_HFCV_CAV, VEHICLE_TYPE_HFCV_NON_CAV};
+
+const vector<VehicleType>cav_vehicle_list{VEHICLE_TYPE_ICEV_CAV, VEHICLE_TYPE_BEV_CAV, VEHICLE_TYPE_HEV_CAV, VEHICLE_TYPE_PHEV_CAV, VEHICLE_TYPE_HFCV_CAV};
+
+//void printDebugLog(string s);
 
 void printDebugLog(string s) {
 	AKIPrintString(("## Debug log ##: " + s).c_str());
@@ -74,84 +105,100 @@ int AAPILoad()
 	return 0;
 }
 
-void Emission(double spd, double grade, double acc, double& E_i, double& E_e, double& E_p1, double& E_p2, double& E_f)
+void Emission(double spd, double grade, double acc, VehicleType vehicle_type, double& E_i, double& E_e, double& E_p1, double& E_p2, double& E_f, double& E_g)
 {
 	double m = 1928, g = 9.8066, cr = 1.75, c1 = 0.0328, c2 = 4.575, rhoa = 1.2256, etad = 0.80;
 	double Af = 2.73, cd = 0.34, beta = 0.93, alpha = 0.2, ch = 0.95;
 	double va = 32, Pa = 2.5, Pb = 5, P_aux = 0.7, P_idle = 1.0, P_hev=10, FC_hev;
-
 	double a0 = 0.000341, a1 = 0.0000583, a2 = 0.000001;
 	double eng[6]; // ICE, PEV, HPEV1, HPEV2, HFEV, Conventioal HEV (second-by-second energy consumption), eng[0] is ICEV fuel rate, eng[1] is BEV energy consumption, and so forth
 	double rst, P_i, P_w, P_b, P_f, P_h;
 	double P_batt, P_fuel;
-	spd = spd / 3.6;
-
-	// VT-CPFM model for gasoline vehicles  %%% some issue about the fuel consumption calculation, shall be around 1.5 L // what is the issue here?
-	rst = rhoa * cd * ch * Af * pow(spd, 2) / 25.92 + g * m * cr * (c1 * spd + c2) / 1000 + g * m * grade;
-	P_i = ((rst + 1.04 * m * acc) / (3600 * etad)) * spd;
-	eng[0] = a0;
-	if (P_i > 0) eng[0] = a0 + a1 * P_i + a2 * pow(P_i, 2);
-
-	// CPEM model for EVs
 	double gs, gc;
 	double eta_dl = 0.92, eta_em = 0.91, eta_rb = 0;
-	gc = sqrt(1 / (1 + pow(grade, 2)));
-	gs = sqrt(1 - pow(gc, 2));
-	P_w = (m * acc + m * g * gc * cr * (c1 * spd * 3.6 + c2) / 1000 + rhoa * Af * cd * pow(spd, 2) / 2 + m * g * gs) * spd;
-	eng[1] = P_w / (eta_dl * eta_em);
-	if (eng[1] < 0) {
-		if (acc < 0) eta_rb = 1 / exp(0.0411 / abs(acc));
-		eng[1] = eng[1] * eta_rb;
-	}
-	eng[1] = eng[1] / 3600; // unit conversion 
-
-
-	// PHEV energy model
 	double P_max = 100 * 0.3;			//max engine motor power
-	if (eng[1] > P_max) {
-		P_h = (eng[1] - P_max);
-		eng[2] = P_max;								// electric usage for PHEV
-		eng[3] = a0 + a1 * P_h + a2 * pow(P_h, 2);  // fuel usage for PHEV
-	}
-	else {
-		eng[2] = eng[1];
-		eng[3] = 0;
-	}
+	spd = spd / 3.6;
 
-	// HFCV energy model
-	if (P_w < 0) P_w = 0;
-	P_w = P_w / 3600;
-	if (P_w <= Pa) {
-		P_batt = P_w + P_aux;
-		P_fuel = P_idle;
-	}
-	else {
-		if (P_w > Pa && P_w <= Pb) {
-			if (spd * 3.6 <= va) {
-				P_batt = P_w + P_aux;
-				P_fuel = P_idle;
+	switch (vehicle_type) {
+	case VehicleType::ICEV_CAV:
+	case VehicleType::ICEV_NON_CAV:
+		// VT-CPFM model for gasoline vehicles  %%% some issue about the fuel consumption calculation, shall be around 1.5 L // what is the issue here?
+		rst = rhoa * cd * ch * Af * pow(spd, 2) / 25.92 + g * m * cr * (c1 * spd + c2) / 1000 + g * m * grade;
+		P_i = ((rst + 1.04 * m * acc) / (3600 * etad)) * spd;
+		eng[0] = a0;
+		if (P_i > 0) eng[0] = a0 + a1 * P_i + a2 * pow(P_i, 2);
+		break;
+
+	case VehicleType::BEV_CAV:
+	case VehicleType::BEV_NON_CAV:
+		// CPEM model for EVs
+		gc = sqrt(1 / (1 + pow(grade, 2)));
+		gs = sqrt(1 - pow(gc, 2));
+		P_w = (m * acc + m * g * gc * cr * (c1 * spd * 3.6 + c2) / 1000 + rhoa * Af * cd * pow(spd, 2) / 2 + m * g * gs) * spd;
+		eng[1] = P_w / (eta_dl * eta_em);
+		if (eng[1] < 0) {
+			if (acc < 0) eta_rb = 1 / exp(0.0411 / abs(acc));
+			eng[1] = eng[1] * eta_rb;
+		}
+		eng[1] = eng[1] / 3600; // unit conversion 
+		break;
+
+	case VehicleType::PHEV_CAV:
+	case VehicleType::PHEV_NON_CAV:
+		// PHEV energy model
+		
+		if (eng[1] > P_max) {
+			P_h = (eng[1] - P_max);
+			eng[2] = P_max;								// electric usage for PHEV
+			eng[3] = a0 + a1 * P_h + a2 * pow(P_h, 2);  // fuel usage for PHEV
+		}
+		else {
+			eng[2] = eng[1];
+			eng[3] = 0;
+		}
+		break;
+
+	case VehicleType::HFCV_CAV:
+	case VehicleType::HFCV_NON_CAV:
+		// HFCV energy model
+		if (P_w < 0) P_w = 0;
+		P_w = P_w / 3600;
+		if (P_w <= Pa) {
+			P_batt = P_w + P_aux;
+			P_fuel = P_idle;
+		}
+		else {
+			if (P_w > Pa && P_w <= Pb) {
+				if (spd * 3.6 <= va) {
+					P_batt = P_w + P_aux;
+					P_fuel = P_idle;
+				}
+				else {
+					P_batt = P_idle + P_aux;
+					P_fuel = P_w * beta;
+				}
 			}
 			else {
-				P_batt = P_idle + P_aux;
+				P_batt = P_w * alpha + P_aux;
 				P_fuel = P_w * beta;
 			}
 		}
-		else {
-			P_batt = P_w * alpha + P_aux;
-			P_fuel = P_w * beta;
-		}
-	}
-	eng[4] = P_batt + P_fuel; // what are the units? conventional fuel converted to kW
+		eng[4] = P_batt + P_fuel; // what are the units? conventional fuel converted to kW
+		break;
 
-	// Conventional hybrid vehicle
-	eng[5] = 0;
-	if ((P_i < 0) || (spd < va / 3.6 && P_i < P_hev)) {
-		eng[5] = 0.025 * spd; // FC_ev = 2.5 L/100 km, convert it to ml/s. If necessary, change it to a contant value instead of the function of speed
-	}
-	else {
-		if ((P_i > 0 && spd > va / 3.6) || (spd < va / 3.6 && P_i >= P_hev)) {
-			eng[5] = 0.06 + 0.003998 * spd * 3.6 + 0.077092 * P_i - 0.00009155 * pow(P_i, 2);
+	case VehicleType::HEV_CAV:
+	case VehicleType::HEV_NON_CAV:
+		// Conventional hybrid vehicle
+		eng[5] = 0;
+		if ((P_i < 0) || (spd < va / 3.6 && P_i < P_hev)) {
+			eng[5] = 0.025 * spd; // FC_ev = 2.5 L/100 km, convert it to ml/s. If necessary, change it to a contant value instead of the function of speed
 		}
+		else {
+			if ((P_i > 0 && spd > va / 3.6) || (spd < va / 3.6 && P_i >= P_hev)) {
+				eng[5] = 0.06 + 0.003998 * spd * 3.6 + 0.077092 * P_i - 0.00009155 * pow(P_i, 2);
+			}
+		}
+		break;
 	}
 
 	E_i = eng[0];
@@ -159,6 +206,7 @@ void Emission(double spd, double grade, double acc, double& E_i, double& E_e, do
 	E_p1 = eng[2];
 	E_p2 = eng[3];
 	E_f = eng[4];
+	E_g = eng[5];
 	//AKIPrintString(("Energy Temp: " + to_string(P_w) + ", Speed = " + to_string(spd) + ", EV = " + to_string(E_e) + ", HFCV = " + to_string(E_f)).c_str());
 
 	//AKIPrintString(("Energy 00000000: " + to_string(grade) + ", ICE = " + to_string(E_e) + ", PHEV = " + to_string(E_p1) + ", PHEV 2 = " + to_string(E_p2) + ", HFCV = " + to_string(E_f)).c_str());
@@ -260,8 +308,8 @@ int AAPIInit()
 		to_string(cav_penetration) + "_" + to_string(repli_id) + ".csv";
 	fecotraj_output.open(output_path, fstream::out);
 	fecotraj_output << "simulation_time" << "\t" << "section_id" << "\t" << "veh_type_id" << "\t" << "numberLane" << "\t" 
-		<< "vehicle_id" << "\t" << "distance2End" << "\t" << "CurrentSpeed" << std::endl;
-
+		<< "vehicle_id" << "\t" << "distance2End" << "\t" << "CurrentSpeed" << "\t" << "acceleration" << "\t" << "driving_distance" <<
+		"\t" << "ICEV_fuel" << "\t" << "BEV_energy" << "\t" << "PHEV_electric_power" << "\t" << "PHEV_fuel" << "\t" << "HFCV_energy" << "\t" << "hev_fuel" << std::endl;
 	return 0;
 }
 
@@ -271,13 +319,14 @@ int AAPISimulationReady()
 	return 0;
 }
 
-int EcoDriveFunc(double d2t, double d2a, double ttg, double spd_cur, double spd_limit, double& spd_opt, double& acc_opt1, double& acc_opt2) {
+int EcoDriveFunc(VehicleType vehicle_type, double d2t, double d2a, double ttg, double spd_cur, double spd_limit, double& spd_opt, double& acc_opt1, double& acc_opt2) {
 	double acc, acc2, spd_cruise = 0;
 	double ta, dd, a0, v0;
-	double eng_ice = 10000000, eng_bev, eng_phev1, eng_phev2, eng_hydr;
+	double eng_ice = 10000000, eng_bev, eng_phev1, eng_phev2, eng_hydr, eng_hev;
 	int flag1, flag2;
 	double eng_opt, eng_tot = eng_ice, eng_tot2 = eng_tot;
 	double ta2, ta3, dd2;
+	double grade = 0.0;
 
 	flag2 = 0; // indicate if eco-drive is successfully applied to control the vehicle, 1 is controled, 0 is not, innitial value is 0
 	for (int i = 0; i<int(spd_limit); i++) { 
@@ -303,7 +352,7 @@ int EcoDriveFunc(double d2t, double d2a, double ttg, double spd_cur, double spd_
 					v0 = spd_cruise;				// in km/hr
 					a0 = 0.0;
 				}
-				Emission(v0, 0.0, a0, eng_ice, eng_bev, eng_phev1, eng_phev2, eng_hydr);
+				Emission(v0, grade, a0, vehicle_type, eng_ice, eng_bev, eng_phev1, eng_phev2, eng_hydr, eng_hev);
 				eng_tot += eng_ice;
 			}
 			
@@ -324,7 +373,7 @@ int EcoDriveFunc(double d2t, double d2a, double ttg, double spd_cur, double spd_
 							v0 = spd_limit;
 							a0 = 0;
 						}
-						Emission(v0, 0.0, a0, eng_ice, eng_bev, eng_phev1, eng_phev2, eng_hydr);
+						Emission(v0, grade, a0, vehicle_type, eng_ice, eng_bev, eng_phev1, eng_phev2, eng_hydr, eng_hev);
 						eng_tot2 += eng_ice;
 					}
 
@@ -516,15 +565,23 @@ void SigOptFunc(double timeSta, int Step, double dt) {	// search for the optimal
 }
 
 void withoutEcodrive_trajectory_output(double simtime, string control_method, int sec_from, int numDownstreamSections) {
+	
+	double tstep = 0.8, grade = 0.0;
+	double ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy;
 	for (int j = 0; j < lnk_eco; j++) {
 		if (int(j % numDownstreamSections) == 0 && (control_method == control_strategy[0] || control_method == control_strategy[1])) {
 			sec_from = lnk_ctl[j][0];
 			int nbveh_upstream_section = AKIVehStateGetNbVehiclesSection(sec_from, true);
 			for (int veh_num = 0; veh_num < nbveh_upstream_section; veh_num++) {
 				InfVeh vehinf_upstream = AKIVehStateGetVehicleInfSection(sec_from, veh_num);
-				int type_id_upstream = AKIVehTypeGetIdVehTypeANG(vehinf_upstream.type);
-				fecotraj_output << simtime << "\t" << sec_from << "\t" << type_id_upstream << "\t" << vehinf_upstream.numberLane << "\t" << vehinf_upstream.idVeh << "\t" << vehinf_upstream.distance2End
-					<< "\t" << vehinf_upstream.CurrentSpeed << std::endl;
+				VehicleType type_id_upstream = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf_upstream.type));
+				double vehicle_acc = (vehinf_upstream.CurrentSpeed - vehinf_upstream.PreviousSpeed) / (3.6 * tstep);
+				double distance_by_tstep = vehinf_upstream.PreviousSpeed / 3.6 * tstep / 1000; // in unit of km
+				Emission(vehinf_upstream.CurrentSpeed, grade, vehicle_acc, type_id_upstream, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
+				int type_id_output = AKIVehTypeGetIdVehTypeANG(vehinf_upstream.type); // VehicleType class cannot be output, so should convert to int
+				fecotraj_output << simtime << "\t" << sec_from << "\t" << type_id_output << "\t" << vehinf_upstream.numberLane << "\t" << vehinf_upstream.idVeh << "\t" << vehinf_upstream.distance2End
+					<< "\t" << vehinf_upstream.CurrentSpeed << "\t" << vehicle_acc << "\t" << distance_by_tstep << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t"
+					<< hfcv_energy << "\t" << hev_energy << std::endl;
 			} 
 		}
 		int sec_to = lnk_ctl[j][1];
@@ -532,16 +589,21 @@ void withoutEcodrive_trajectory_output(double simtime, string control_method, in
 
 		for (int veh_num = 0; veh_num < nbveh_downstream_section; veh_num++) {
 			InfVeh vehinf_downstream = AKIVehStateGetVehicleInfSection(sec_to, veh_num);
-			int type_id_downstream = AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type);
-			fecotraj_output << simtime << "\t" << sec_to << "\t" << type_id_downstream << "\t" << vehinf_downstream.numberLane << "\t" << vehinf_downstream.idVeh << "\t" << vehinf_downstream.CurrentPos
-				<< "\t" << vehinf_downstream.CurrentSpeed << std::endl;
+			VehicleType type_id_downstream = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type));
+			double vehicle_acc = (vehinf_downstream.CurrentSpeed - vehinf_downstream.PreviousSpeed) / (3.6 * tstep);
+			double distance_by_tstep = vehinf_downstream.PreviousSpeed / 3.6 * tstep; // in unit of m
+			Emission(vehinf_downstream.CurrentSpeed, grade, vehicle_acc, type_id_downstream, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
+			int type_id_output = AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type); // VehicleType class cannot be output, so should convert to int
+			fecotraj_output << simtime << "\t" << sec_to << "\t" << type_id_output << "\t" << vehinf_downstream.numberLane << "\t" << vehinf_downstream.idVeh << "\t" << vehinf_downstream.CurrentPos
+				<< "\t" << vehinf_downstream.CurrentSpeed << "\t" << vehicle_acc << "\t" << distance_by_tstep << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t"
+				<< hfcv_energy << "\t" << hev_energy << std::endl;
 		}
 	}
 } // this func used to output trajectory for control strategy "no control" and "signal opt", and trajectory of downstream section for strategies with ecodrive
 
 void ecoDriveControlSectionOutput() {
 	int offset_ecoDrive, sig_cycle_ecoDrive, ph_cur_ecoDrive, ph_veh_ecoDrive = 2, sig_id_ecoDrive = 5287; // ph_veh=2 means only control phase 2? but why the ecodrive file has two phases? may have error without initialization
-	int cav_typ_ecoDrive = 5380, vn_lan_ecoDrive[6]; // vn_lan represents the total number of vehicles in each lane of the controlled section
+	int vn_lan_ecoDrive[6]; // vn_lan represents the total number of vehicles in each lane of the controlled section
 	double ttg_ecoDrive, ttg0_ecoDrive, ttg1_ecoDrive, dtg1_ecoDrive, ttr_ecoDrive, ph_start_ecoDrive, tstep_ecoDrive = 0.8;
 	double max_ecoDrive, min_ecoDrive, dur_ecoDrive;
 	double spd_opt_ecoDrive = 100.0, acc_opt1_ecoDrive = 0, acc_opt2_ecoDrive = 3.0, spd_wave_ecoDrive, spd_pre_ecoDrive[7];
@@ -553,6 +615,8 @@ void ecoDriveControlSectionOutput() {
 	int Step_ecoDrive = 12;
 	double dt_ecoDrive = 5.0;
 	double ph_dur_ecoDrive[8]; // there are a total of 4 phases, why use 8? ph_dur refers to phase duration
+	double grade_ecoDrive = 0.0;
+	double ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy;
 
 	int secnb = AKIInfNetNbSectionsANG();
 	for (int i = 0; i < secnb; i++) {
@@ -587,9 +651,13 @@ void ecoDriveControlSectionOutput() {
 				}
 
 				//AKIVehTrackedModifyLane(vehinf.idVeh, 0);			// does not allow lane changing in the control section
-				int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
+				//int type_id = AKIVehTypeGetIdVehTypeANG(vehinf.type);
+				VehicleType type_id = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf.type));
 
-				if (type_id == cav_typ_ecoDrive) {		// eco-driving only applied to CAVs
+				// Calculate the number of occurance of the CAV ID in the cav vehicle list, if >0, that means the vehicle is CAV
+				int count_occurrance_of_target_in_vector = (int)count(cav_vehicle_list.begin(), cav_vehicle_list.end(), type_id);
+
+				if (count_occurrance_of_target_in_vector > 0) {		// eco-driving only applied to CAVs
 					int sec_to = AKIVehInfPathGetNextSection(vehinf.idVeh, secid);
 					for (int j = 0; j < lnk_eco; j++) {		// identify the phase of the vehicle
 						if (secid == lnk_ctl[j][0] && sec_to == lnk_ctl[j][1]) {
@@ -663,7 +731,7 @@ void ecoDriveControlSectionOutput() {
 						}
 
 						if (d2t_ecoDrive > 0) {
-							int flag = EcoDriveFunc(d2t_ecoDrive, d2a_ecoDrive, ttg0_ecoDrive, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt_ecoDrive, acc_opt1_ecoDrive, acc_opt2_ecoDrive);
+							int flag = EcoDriveFunc(type_id,d2t_ecoDrive, d2a_ecoDrive, ttg0_ecoDrive, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt_ecoDrive, acc_opt1_ecoDrive, acc_opt2_ecoDrive);
 							if (flag > 0) {
 								//if (spd_opt < vehinf.CurrentSpeed) AKIVehTrackedForceSpeed(vehinf.idVeh, vehinf.CurrentSpeed - acc_opt * tstep * 3.6);
 								if (spd_opt_ecoDrive < vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6) spd_opt_ecoDrive = vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6;
@@ -700,7 +768,7 @@ void ecoDriveControlSectionOutput() {
 								d2t_ecoDrive = vehinf.distance2End - d2t_ecoDrive;
 							}
 							if (d2t_ecoDrive > 0) {
-								int flag = EcoDriveFunc(d2t_ecoDrive, d2a_ecoDrive, ttg0_ecoDrive, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt_ecoDrive, acc_opt1_ecoDrive, acc_opt2_ecoDrive);
+								int flag = EcoDriveFunc(type_id, d2t_ecoDrive, d2a_ecoDrive, ttg0_ecoDrive, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt_ecoDrive, acc_opt1_ecoDrive, acc_opt2_ecoDrive);
 								if (flag > 0) {
 									if (spd_opt_ecoDrive < vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6) spd_opt_ecoDrive = vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6; // Ensure the speed to which we decelerate next second greater than the final cruise speed, otherwise cruise instead of decelerating
 									if (flg_lane_ecoDrive == 0) {
@@ -714,8 +782,14 @@ void ecoDriveControlSectionOutput() {
 
 				spd_pre_ecoDrive[vehinf.numberLane - 1] = vehinf.CurrentSpeed;
 
+				// calculate second_by_second distance and energy 
+				double vehicle_acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * tstep_ecoDrive);
+				double distance = vehinf.PreviousSpeed / 3.6 * tstep_ecoDrive / 1000; // in unit of km
+				Emission(vehinf.CurrentSpeed, grade_ecoDrive, vehicle_acc, type_id, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
+				int vehicle_type_output = AKIVehTypeGetIdVehTypeANG(vehinf.type);
 				// save eco-driving vehicle trajectory: time, section ID, vehicle type, lane ID, vehicle ID, distance to signal, current speed
-				fecotraj_output << simtime_ecoDrive << "\t" << secid << "\t" << type_id << "\t" << vehinf.numberLane << "\t" << vehinf.idVeh << "\t" << vehinf.distance2End << "\t" << vehinf.CurrentSpeed << std::endl;
+				fecotraj_output << simtime_ecoDrive << "\t" << secid << "\t" << vehicle_type_output << "\t" << vehinf.numberLane << "\t" << vehinf.idVeh << "\t" << vehinf.distance2End << "\t" << vehinf.CurrentSpeed << "\t" <<
+					vehicle_acc << "\t" << distance << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t" << hfcv_energy << "\t" << hev_energy << std::endl;
 				//AKIPrintString(("type_id is: " + to_string(type_id) + "\n" + "vehicle_id is: " + to_string(vehinf.idVeh) + "\n" + "speed is: " + to_string(vehinf.CurrentSpeed)).c_str());
 			}
 		}
@@ -725,7 +799,7 @@ void ecoDriveControlSectionOutput() {
 int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AAPI is the main function 
 {
 	int offset, sig_cycle, ph_cur, ph_veh = 2, sig_id = 5287; // ph_veh=2 means only control phase 2? but why the ecodrive file has two phases? may have error without initialization
-	int cav_typ = 5380, vn_lan[6]; // vn_lan represents the total number of vehicles in each lane of the controlled section
+	int vn_lan[6]; // vn_lan represents the total number of vehicles in each lane of the controlled section
 	double ttg, ttg0, ttg1, dtg1, ttr, ph_start, tstep = 0.8; 
 	double max, min, dur;
 	double spd_opt = 100.0, acc_opt1 = 0, acc_opt2 = 3.0, spd_wave, spd_pre[7];
