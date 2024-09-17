@@ -236,6 +236,7 @@ void SigPhLnk(double ctim) { // SigPhLnk function used to find which lane contro
 							for (int origin_lane_id = turn_inf.originFromLane; origin_lane_id <= turn_inf.originToLane; origin_lane_id++) { // iterate all lanes of that turn in the origin section
 								lan_ctl[sig_lnk[turn_org]][origin_lane_id] = j; // lnk_order index origin section and k index lane
 							}
+							
 						}
 						else {
 							sig_lnk[turn_org] = lnk_order;
@@ -298,11 +299,21 @@ int AAPIInit()
 
 	// update the link and phase information
 	SigPhLnk(0);
+	/*string debug_output_path = "results\\debug.txt";
+	ofstream lane_phase_match;
+	lane_phase_match.open(debug_output_path, fstream::out);
+	lane_phase_match << lan_ctl << std::endl;
+
+	for (auto x : sig_lnk) {
+		int s_id = x.first;
+		int l_order_id = x.second;
+		lane_phase_match << s_id << l_order_id << std::endl;
+	}
+	lane_phase_match.close();*/
 
 	// save output to specified path
 	AKIPrintString((to_string(experiment_id)).c_str());
-	AKIPrintString(("demand percent is : " + to_string(demand_percentage)).c_str());
-	AKIPrintString(("CAV percent is: " + to_string(cav_penetration)).c_str());
+
 	string output_path;
 	output_path = "results\\" + control_method + "_" + "demand" + to_string(demand_percentage) + "_" + "CAV" +
 		to_string(cav_penetration) + "_" + to_string(repli_id) + ".csv";
@@ -310,6 +321,7 @@ int AAPIInit()
 	fecotraj_output << "simulation_time" << "\t" << "section_id" << "\t" << "veh_type_id" << "\t" << "numberLane" << "\t" 
 		<< "vehicle_id" << "\t" << "distance2End" << "\t" << "CurrentSpeed" << "\t" << "acceleration" << "\t" << "driving_distance" <<
 		"\t" << "ICEV_fuel" << "\t" << "BEV_energy" << "\t" << "PHEV_electric_power" << "\t" << "PHEV_fuel" << "\t" << "HFCV_energy" << "\t" << "hev_fuel" << std::endl;
+	
 	return 0;
 }
 
@@ -571,6 +583,7 @@ void withoutEcodrive_trajectory_output(double simtime, string control_method, in
 	for (int j = 0; j < lnk_eco; j++) {
 		if (int(j % numDownstreamSections) == 0 && (control_method == control_strategy[0] || control_method == control_strategy[1])) {
 			sec_from = lnk_ctl[j][0];
+			AKIPrintString(("control section is: " + to_string(sec_from)).c_str());
 			int nbveh_upstream_section = AKIVehStateGetNbVehiclesSection(sec_from, true);
 			for (int veh_num = 0; veh_num < nbveh_upstream_section; veh_num++) {
 				InfVeh vehinf_upstream = AKIVehStateGetVehicleInfSection(sec_from, veh_num);
@@ -586,7 +599,7 @@ void withoutEcodrive_trajectory_output(double simtime, string control_method, in
 		}
 		int sec_to = lnk_ctl[j][1];
 		int nbveh_downstream_section = AKIVehStateGetNbVehiclesSection(sec_to, true);
-
+		AKIPrintString(("downstream section is: " + to_string(sec_to)).c_str());
 		for (int veh_num = 0; veh_num < nbveh_downstream_section; veh_num++) {
 			InfVeh vehinf_downstream = AKIVehStateGetVehicleInfSection(sec_to, veh_num);
 			VehicleType type_id_downstream = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type));
@@ -656,6 +669,7 @@ void ecoDriveControlSectionOutput() {
 
 				// Calculate the number of occurance of the CAV ID in the cav vehicle list, if >0, that means the vehicle is CAV
 				int count_occurrance_of_target_in_vector = (int)count(cav_vehicle_list.begin(), cav_vehicle_list.end(), type_id);
+				AKIPrintString(("the number of count_occurrance_of_target_in_vector is: " + to_string(count_occurrance_of_target_in_vector)).c_str());
 
 				if (count_occurrance_of_target_in_vector > 0) {		// eco-driving only applied to CAVs
 					int sec_to = AKIVehInfPathGetNextSection(vehinf.idVeh, secid);
@@ -663,7 +677,7 @@ void ecoDriveControlSectionOutput() {
 						if (secid == lnk_ctl[j][0] && sec_to == lnk_ctl[j][1]) {
 							ph_veh_ecoDrive = lnk_ctl[j][2];  // the phase that would be controlled
 							sig_id_ecoDrive = lnk_ctl[j][3];  // control signal ID
-							AKIPrintString(("section_id is: " + to_string(lnk_ctl[j][0]) + " ph_veh is: " + to_string(lnk_ctl[j][2]) + " eco_flg is: " + to_string(eco_flg[secid])).c_str());
+							//AKIPrintString(("section_id is: " + to_string(lnk_ctl[j][0]) + " ph_veh is: " + to_string(lnk_ctl[j][2]) + " eco_flg is: " + to_string(eco_flg[secid])).c_str());
 							break;
 						}
 					}
@@ -713,6 +727,7 @@ void ecoDriveControlSectionOutput() {
 						AKIVehSetAsTracked(vehinf.idVeh);
 						// calculate queue tail
 						// quene estimation is missing
+						AKIPrintString(("wrong lane flag is: " + to_string(flg_lane_ecoDrive)).c_str());
 
 						// control the speed of CVs
 						spd_opt_ecoDrive = vehinf.CurrentSpeed;
@@ -733,12 +748,12 @@ void ecoDriveControlSectionOutput() {
 						if (d2t_ecoDrive > 0) {
 							int flag = EcoDriveFunc(type_id,d2t_ecoDrive, d2a_ecoDrive, ttg0_ecoDrive, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt_ecoDrive, acc_opt1_ecoDrive, acc_opt2_ecoDrive);
 							if (flag > 0) {
-								//if (spd_opt < vehinf.CurrentSpeed) AKIVehTrackedForceSpeed(vehinf.idVeh, vehinf.CurrentSpeed - acc_opt * tstep * 3.6);
 								if (spd_opt_ecoDrive < vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6) spd_opt_ecoDrive = vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6;
 
-								if (flg_lane_ecoDrive == 0) {
-									AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);			// if a CAV is on a wrong lane, then we do not apply eco-driving. We do not control anything to this vehicle 
-								}
+								//if (flg_lane_ecoDrive == 0) {
+								//	AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);			// if a CAV is on a wrong lane, then we do not apply eco-driving. We do not control anything to this vehicle 
+								//}
+								AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);
 							}
 							// the code is just used to verify if results are correct
 							if (secid == 1249 && ph_veh_ecoDrive == 2)
@@ -747,6 +762,8 @@ void ecoDriveControlSectionOutput() {
 						}
 					}
 					else { // deal with the situation with queue at green light
+						AKIPrintString(("wrong lane flag is: " + to_string(flg_lane_ecoDrive)).c_str());
+
 						if (spd_pre_ecoDrive[vehinf.numberLane - 1] < 1.0) { // the previous vehicle is in the queue
 							ttg1_ecoDrive = ph_dur_ecoDrive[ph_cur_ecoDrive - 1] - ttr_ecoDrive;
 							dtg1_ecoDrive = secinf.capacity / secinf.nbCentralLanes * ttg1_ecoDrive / 3600; // In most cases, nbcentrallane determine section capacity in Aimsun, adding side lane won't significantly impact capacity
@@ -771,16 +788,17 @@ void ecoDriveControlSectionOutput() {
 								int flag = EcoDriveFunc(type_id, d2t_ecoDrive, d2a_ecoDrive, ttg0_ecoDrive, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt_ecoDrive, acc_opt1_ecoDrive, acc_opt2_ecoDrive);
 								if (flag > 0) {
 									if (spd_opt_ecoDrive < vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6) spd_opt_ecoDrive = vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6; // Ensure the speed to which we decelerate next second greater than the final cruise speed, otherwise cruise instead of decelerating
-									if (flg_lane_ecoDrive == 0) {
+									/*if (flg_lane_ecoDrive == 0) {
 										AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);
-									}
+									}*/
+									AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);
 								}
 							}
 						}
 					}
 				}
 
-				spd_pre_ecoDrive[vehinf.numberLane - 1] = vehinf.CurrentSpeed;
+				spd_pre_ecoDrive[vehinf.numberLane - 1] = vehinf.CurrentSpeed; // calculate the speed of the previous vehicle, the current vehicle would be the leader of the immediate following vehicle at the next iteration
 
 				// calculate second_by_second distance and energy 
 				double vehicle_acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * tstep_ecoDrive);
@@ -813,16 +831,14 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 	int sec_from = 0; // which section the turn makes from (control section)
 	int numDownstreamSections = 2; // the number of downstream sections with respect to each control section
 
-	int scenario_id = ANGConnGetScenarioId();
-	void* control_strategy_pointer = ANGConnGetAttribute(AKIConvertFromAsciiString("GKScenario::driveControlStrategy"));
-	bool anyNonAsciiChar;
-	string control_method = string(AKIConvertToAsciiString(ANGConnGetAttributeValueString(control_strategy_pointer, scenario_id), false, &anyNonAsciiChar));
 
 	if (control_method == control_strategy[0]) {  // no control
+		AKIPrintString("no control is applied.");
 		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections);
 	}
 
 	if (control_method == control_strategy[1]) {  // signal optimization only
+		AKIPrintString("signal optimization is applied.");
 		if (int(simtime * 10) % int(Step * dt * 10) == 0) {
 			SigOptFunc(timeSta, Step, dt);
 		}
@@ -831,26 +847,29 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 
 	if (control_method == control_strategy[2]) {  // eco-driving only
 		// output vehicle trajectory in downwtream sections of the control section
-	
-		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
+		AKIPrintString("eco-driving is applied.");
 
 		// eco-driving 
 		ecoDriveControlSectionOutput();
+		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
+
+		
 	}
 
 	if (control_method == control_strategy[3]) {  // proposed cooperative control
+		AKIPrintString("proposed control is applied.");
 		// update the optimal timing plan at every Step*dt seconds
 		if (int(simtime * 10) % int(Step * dt * 10) == 0) {
 			SigOptFunc(timeSta, Step, dt);
 		}
 
-		// output vehicle trajectory in downwtream sections of the control section
-
-		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
-
 		// eco-driving 
 		ecoDriveControlSectionOutput();
+
+		// output vehicle trajectory in downwtream sections of the control section
+		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
 	}
+
 	return 0;
 }
 
