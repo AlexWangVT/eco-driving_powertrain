@@ -43,7 +43,7 @@ unordered_map<int, int> eco_flg; // <section_id, 0/1> indicate if a section is a
 ifstream ecodrive; 
 ifstream sigopt;
 ofstream fecotraj_output;
-int lnk_eco, lnk_ctl[100][4]; // lnk_ctl why [100][4]?
+int lnk_eco, lnk_ctl[100][4]; // lnk_ctl why [100][4]? because the maximum number of lanes in the network is 3
 int nsig, sig_ctl[100][2], ph_lnk[200][8], sig_sec[100][4], lan_ctl[100][4];
 double sigtim[4], sigmin[4];
 unordered_map<int, int> sig_lnk; // identify the links associated with the signal optimizaiton system
@@ -216,43 +216,47 @@ void SigPhLnk(double ctim) { // SigPhLnk function used to find which lane contro
 	int sigid, nph;
 	int ngrp, nturn;
 	int grp_id, grp_trn, turn_org, turn_dst, tmp_turn_org = 0;
-	int lnk_order = 0;
+	int lnk_order = 1;
 	int sec_fm, sec_to;
 	for (int i = 0; i < nsig; i++) {
 		sigid = sig_ctl[i][0];
 		nph = sig_ctl[i][1];			//temporarily, set the group be the same to the phase
 		nturn = AKIInfNetGetNbTurnsInNode(sigid);
-		for (int j = 0; j < nph; j++) {		// for all nph phases/signal group
-			grp_trn = ECIGetNumberTurningsofSignalGroup(sigid, j + 1);
+		for (int j = 1; j < nph; j++) {		// for all nph phases/signal group
+			grp_trn = ECIGetNumberTurningsofSignalGroup(sigid, j);
+			
 			for (int k = 0; k < grp_trn; k++) {
-				ECIGetFromToofTurningofSignalGroup(nsig, j + 1, k, &sec_fm, &sec_to);
+				ECIGetFromToofTurningofSignalGroup(sigid, j, k, &sec_fm, &sec_to);
+				
 				for (int m = 0; m < nturn; m++) {
 					A2KTurnInf turn_inf = AKIInfNetGetTurnInfo(sigid, m);
 					turn_org = turn_inf.originSectionId;
 					turn_dst = turn_inf.destinationSectionId;
+
 					if (turn_org == sec_fm && turn_dst == sec_to) { // match turn with signal phase
-						if (turn_org == tmp_turn_org) {
-							sig_lnk[turn_org] = sig_lnk[tmp_turn_org];
-							for (int origin_lane_id = turn_inf.originFromLane; origin_lane_id <= turn_inf.originToLane; origin_lane_id++) { // iterate all lanes of that turn in the origin section
-								lan_ctl[sig_lnk[turn_org]][origin_lane_id] = j; // lnk_order index origin section and k index lane
-							}
-							
-						}
-						else {
-							sig_lnk[turn_org] = lnk_order;
-							for (int origin_lane_id = turn_inf.originFromLane; origin_lane_id <= turn_inf.originToLane; origin_lane_id++) { // iterate all lanes of that turn in the origin section
-								lan_ctl[sig_lnk[turn_org]][origin_lane_id] = j; // lnk_order index origin section and k index lane
-							}
-							lnk_order++;
-						}
-						/*if (sig_lnk[turn_org] == 0) {
+						//if (turn_org == tmp_turn_org) {
+						//	sig_lnk[turn_org] = sig_lnk[tmp_turn_org];
+						//	for (int origin_lane_id = turn_inf.originFromLane; origin_lane_id <= turn_inf.originToLane; origin_lane_id++) { // iterate all lanes of that turn in the origin section
+						//		lan_ctl[sig_lnk[turn_org]][origin_lane_id] = j; // lnk_order index origin section and k index lane
+						//	}
+						//	
+						//}
+						//else {
+						//	sig_lnk[turn_org] = lnk_order;
+						//	for (int origin_lane_id = turn_inf.originFromLane; origin_lane_id <= turn_inf.originToLane; origin_lane_id++) { // iterate all lanes of that turn in the origin section
+						//		lan_ctl[sig_lnk[turn_org]][origin_lane_id] = j; // lnk_order index origin section and k index lane
+						//	}
+						//	lnk_order++;
+						//}
+						if (sig_lnk[turn_org] == 0) {
 							sig_lnk[turn_org] = lnk_order;
 							lnk_order++;
 						}
 						for (int k = turn_inf.originFromLane; k <= turn_inf.originToLane; k++) {
 							lan_ctl[sig_lnk[turn_org]][k] = j;
-						}*/
+						}
 						tmp_turn_org = turn_org;
+						AKIPrintString(("sig_lnk value is: " + to_string(sig_lnk[turn_org]) + "and turn origin section is: " + to_string(turn_org)).c_str());
 					}
 				}
 			}
@@ -280,7 +284,7 @@ int AAPIInit()
 		}
 		eco_flg[lnk_ctl[row][0]] = 1;
 		AKIPrintString(("origin_section is: " + to_string(lnk_ctl[row][0]) + ", destination_section is: " + to_string(lnk_ctl[row][1])).c_str());
-		AKIPrintString(("eco_flag is: " + to_string(eco_flg[lnk_ctl[row][0]])).c_str());
+		//AKIPrintString(("eco_flag is: " + to_string(eco_flg[lnk_ctl[row][0]])).c_str());
 		row++;
 	}
 	lnk_eco = row;
@@ -293,23 +297,29 @@ int AAPIInit()
 		sigopt >> sig_ctl[i][0]>> sig_ctl[i][1];  // intersection node id, number of phases
 		sigopt >> sig_sec[i][0] >> sig_sec[i][1] >> sig_sec[i][2] >> sig_sec[i][3]; // links entering to the intersection (, up to 4, if no, then enter 0)
 		sig_flg[sig_ctl[i][0]] = i;
-		AKIPrintString(("Signal optimization input: " + to_string(sig_ctl[i][0]) + ", number of phases = " + to_string(sig_ctl[i][1]) + ", origin section = " + to_string(sig_sec[i][0])).c_str());
+		//AKIPrintString(("Signal optimization input: " + to_string(sig_ctl[i][0]) + ", number of phases = " + to_string(sig_ctl[i][1]) + ", origin section = " + to_string(sig_sec[i][0])).c_str());
 	}
 	sigopt.close();
 
 	// update the link and phase information
 	SigPhLnk(0);
-	/*string debug_output_path = "results\\debug.txt";
-	ofstream lane_phase_match;
-	lane_phase_match.open(debug_output_path, fstream::out);
-	lane_phase_match << lan_ctl << std::endl;
+	
+	//// output lan_ctl and sig_lnk results
+	//string debug_output_path = "results\\debug.txt";
+	//ofstream lane_phase_match;
+	//int size_lan_ctl = 100, row_lan_ctl = 4;
+	//lane_phase_match.open(debug_output_path, fstream::out);
+	//for (int i = 0; i < size_lan_ctl; i++) {
+	//	for (int j = 0; j < row_lan_ctl; j++)
+	//	{
+	//		lane_phase_match << lan_ctl[i][j] << '\t';
+	//	}
+	//	lane_phase_match << std::endl;
+	//}
+	//lane_phase_match.close();
 
-	for (auto x : sig_lnk) {
-		int s_id = x.first;
-		int l_order_id = x.second;
-		lane_phase_match << s_id << l_order_id << std::endl;
-	}
-	lane_phase_match.close();*/
+
+	//AKIPrintString(("sig_lnk size is: " +  to_string(sig_lnk.size())).c_str());
 
 	// save output to specified path
 	AKIPrintString((to_string(experiment_id)).c_str());
@@ -599,7 +609,7 @@ void withoutEcodrive_trajectory_output(double simtime, string control_method, in
 		}
 		int sec_to = lnk_ctl[j][1];
 		int nbveh_downstream_section = AKIVehStateGetNbVehiclesSection(sec_to, true);
-		AKIPrintString(("downstream section is: " + to_string(sec_to)).c_str());
+		//AKIPrintString(("downstream section is: " + to_string(sec_to)).c_str());
 		for (int veh_num = 0; veh_num < nbveh_downstream_section; veh_num++) {
 			InfVeh vehinf_downstream = AKIVehStateGetVehicleInfSection(sec_to, veh_num);
 			VehicleType type_id_downstream = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type));
@@ -669,7 +679,7 @@ void ecoDriveControlSectionOutput() {
 
 				// Calculate the number of occurance of the CAV ID in the cav vehicle list, if >0, that means the vehicle is CAV
 				int count_occurrance_of_target_in_vector = (int)count(cav_vehicle_list.begin(), cav_vehicle_list.end(), type_id);
-				AKIPrintString(("the number of count_occurrance_of_target_in_vector is: " + to_string(count_occurrance_of_target_in_vector)).c_str());
+				//AKIPrintString(("the number of count_occurrance_of_target_in_vector is: " + to_string(count_occurrance_of_target_in_vector)).c_str());
 
 				if (count_occurrance_of_target_in_vector > 0) {		// eco-driving only applied to CAVs
 					int sec_to = AKIVehInfPathGetNextSection(vehinf.idVeh, secid);
@@ -681,8 +691,17 @@ void ecoDriveControlSectionOutput() {
 							break;
 						}
 					}
+					AKIPrintString(("section id is: " + to_string(secid) + "section order is: " + to_string(lnk_order_ecoDrive) + "numberLane is: " + to_string(vehinf.numberLane)).c_str());
+
 					int ph_lan = lan_ctl[lnk_order_ecoDrive][vehinf.numberLane];			// phase of current lane
-					if (ph_lan != ph_veh_ecoDrive) flg_lane_ecoDrive = 1;							// the vehicle stay at a wrong lane of its expected phase, we don't control the vehicle at the wrong lane
+					AKIPrintString(("ph_lane is: " + to_string(ph_lan) + " and lnk_ctl is: " + to_string(ph_veh_ecoDrive)).c_str());
+					if (ph_lan == ph_veh_ecoDrive) {
+						flg_lane_ecoDrive = 0;
+					}
+					else {
+						flg_lane_ecoDrive = 1;
+					}// the vehicle stay at a wrong lane of its expected phase, we don't control the vehicle at the wrong lane
+					AKIPrintString(("wrong lane flag is: " + to_string(flg_lane_ecoDrive)).c_str());
 
 					// find the current status and the time to green or time to red
 					offset_ecoDrive = ECIGetOffset(sig_id_ecoDrive); // not used?
@@ -725,9 +744,6 @@ void ecoDriveControlSectionOutput() {
 					// when the current phase is green but vehicle cannot get through the junction if not speeding?
 					if (ph_veh_ecoDrive != ph_cur_ecoDrive) {
 						AKIVehSetAsTracked(vehinf.idVeh);
-						// calculate queue tail
-						// quene estimation is missing
-						AKIPrintString(("wrong lane flag is: " + to_string(flg_lane_ecoDrive)).c_str());
 
 						// control the speed of CVs
 						spd_opt_ecoDrive = vehinf.CurrentSpeed;
@@ -750,19 +766,18 @@ void ecoDriveControlSectionOutput() {
 							if (flag > 0) {
 								if (spd_opt_ecoDrive < vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6) spd_opt_ecoDrive = vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6;
 
-								//if (flg_lane_ecoDrive == 0) {
-								//	AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);			// if a CAV is on a wrong lane, then we do not apply eco-driving. We do not control anything to this vehicle 
-								//}
-								AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);
+								if (flg_lane_ecoDrive == 0) {
+									AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);			// if a CAV is on a wrong lane, then we do not apply eco-driving. We do not control anything to this vehicle 
+								}
+								
 							}
 							// the code is just used to verify if results are correct
-							if (secid == 1249 && ph_veh_ecoDrive == 2)
-								AKIPrintString(("Control Indicator: " + to_string(vehinf.CurrentSpeed) + ", phase = " + to_string(flag) + ", Speed = " + to_string(spd_opt_ecoDrive) + ", Acc = " + to_string(acc_opt1_ecoDrive) + ", distance = " + to_string(vehinf.distance2End) + ", TTG = " + to_string(ttg_ecoDrive)).c_str());
+							/*if (secid == 1249 && ph_veh_ecoDrive == 2)
+								AKIPrintString(("Control Indicator: " + to_string(vehinf.CurrentSpeed) + ", phase = " + to_string(flag) + ", Speed = " + to_string(spd_opt_ecoDrive) + ", Acc = " + to_string(acc_opt1_ecoDrive) + ", distance = " + to_string(vehinf.distance2End) + ", TTG = " + to_string(ttg_ecoDrive)).c_str());*/
 							// print out data to check if it is correct
 						}
 					}
 					else { // deal with the situation with queue at green light
-						AKIPrintString(("wrong lane flag is: " + to_string(flg_lane_ecoDrive)).c_str());
 
 						if (spd_pre_ecoDrive[vehinf.numberLane - 1] < 1.0) { // the previous vehicle is in the queue
 							ttg1_ecoDrive = ph_dur_ecoDrive[ph_cur_ecoDrive - 1] - ttr_ecoDrive;
@@ -788,10 +803,10 @@ void ecoDriveControlSectionOutput() {
 								int flag = EcoDriveFunc(type_id, d2t_ecoDrive, d2a_ecoDrive, ttg0_ecoDrive, vehinf.CurrentSpeed, secinf.speedLimit, spd_opt_ecoDrive, acc_opt1_ecoDrive, acc_opt2_ecoDrive);
 								if (flag > 0) {
 									if (spd_opt_ecoDrive < vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6) spd_opt_ecoDrive = vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6; // Ensure the speed to which we decelerate next second greater than the final cruise speed, otherwise cruise instead of decelerating
-									/*if (flg_lane_ecoDrive == 0) {
+									if (flg_lane_ecoDrive == 0) {
 										AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);
-									}*/
-									AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);
+									}
+									
 								}
 							}
 						}
@@ -833,12 +848,12 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 
 
 	if (control_method == control_strategy[0]) {  // no control
-		AKIPrintString("no control is applied.");
+		//AKIPrintString("no control is applied.");
 		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections);
 	}
 
 	if (control_method == control_strategy[1]) {  // signal optimization only
-		AKIPrintString("signal optimization is applied.");
+		//AKIPrintString("signal optimization is applied.");
 		if (int(simtime * 10) % int(Step * dt * 10) == 0) {
 			SigOptFunc(timeSta, Step, dt);
 		}
@@ -847,7 +862,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 
 	if (control_method == control_strategy[2]) {  // eco-driving only
 		// output vehicle trajectory in downwtream sections of the control section
-		AKIPrintString("eco-driving is applied.");
+		//AKIPrintString("eco-driving is applied.");
 
 		// eco-driving 
 		ecoDriveControlSectionOutput();
@@ -857,7 +872,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 	}
 
 	if (control_method == control_strategy[3]) {  // proposed cooperative control
-		AKIPrintString("proposed control is applied.");
+		//AKIPrintString("proposed control is applied.");
 		// update the optimal timing plan at every Step*dt seconds
 		if (int(simtime * 10) % int(Step * dt * 10) == 0) {
 			SigOptFunc(timeSta, Step, dt);
