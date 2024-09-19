@@ -582,6 +582,7 @@ void SigOptFunc(double timeSta, int Step, double dt) {	// search for the optimal
 				ph_dur = sigmin[p] - sigmin[p - 1];
 			}
 			int Report = ECIChangeTimingPhase(sigid, p+1, ph_dur, timeSta);		// set the new timing plan
+			AKIPrintString(("the phase id is: " + to_string(p) + ", new phase duration is: " + to_string(ph_dur)).c_str());
 		}
 	}
 }
@@ -593,7 +594,7 @@ void withoutEcodrive_trajectory_output(double simtime, string control_method, in
 	for (int j = 0; j < lnk_eco; j++) {
 		if (int(j % numDownstreamSections) == 0 && (control_method == control_strategy[0] || control_method == control_strategy[1])) {
 			sec_from = lnk_ctl[j][0];
-			AKIPrintString(("control section is: " + to_string(sec_from)).c_str());
+			/*AKIPrintString(("control section is: " + to_string(sec_from)).c_str());*/
 			int nbveh_upstream_section = AKIVehStateGetNbVehiclesSection(sec_from, true);
 			for (int veh_num = 0; veh_num < nbveh_upstream_section; veh_num++) {
 				InfVeh vehinf_upstream = AKIVehStateGetVehicleInfSection(sec_from, veh_num);
@@ -691,22 +692,23 @@ void ecoDriveControlSectionOutput() {
 							break;
 						}
 					}
-					AKIPrintString(("section id is: " + to_string(secid) + "section order is: " + to_string(lnk_order_ecoDrive) + "numberLane is: " + to_string(vehinf.numberLane)).c_str());
+					//AKIPrintString(("section id is: " + to_string(secid) + "section order is: " + to_string(lnk_order_ecoDrive) + "numberLane is: " + to_string(vehinf.numberLane)).c_str());
 
 					int ph_lan = lan_ctl[lnk_order_ecoDrive][vehinf.numberLane];			// phase of current lane
-					AKIPrintString(("ph_lane is: " + to_string(ph_lan) + " and lnk_ctl is: " + to_string(ph_veh_ecoDrive)).c_str());
+					//AKIPrintString(("ph_lane is: " + to_string(ph_lan) + " and lnk_ctl is: " + to_string(ph_veh_ecoDrive)).c_str());
 					if (ph_lan == ph_veh_ecoDrive) {
 						flg_lane_ecoDrive = 0;
 					}
 					else {
 						flg_lane_ecoDrive = 1;
 					}// the vehicle stay at a wrong lane of its expected phase, we don't control the vehicle at the wrong lane
-					AKIPrintString(("wrong lane flag is: " + to_string(flg_lane_ecoDrive)).c_str());
+					//AKIPrintString(("wrong lane flag is: " + to_string(flg_lane_ecoDrive)).c_str());
 
 					// find the current status and the time to green or time to red
 					offset_ecoDrive = ECIGetOffset(sig_id_ecoDrive); // not used?
 					sig_cycle_ecoDrive = ECIGetControlCycleofJunction(0, sig_id_ecoDrive);
-					
+					AKIPrintString(("signal cycle is: " + to_string(sig_cycle_ecoDrive)).c_str());
+
 					for (int p = 0; p < ECIGetNbPhasesofJunction(0, sig_id_ecoDrive); p++) {
 						int flg = ECIGetDurationsPhase(sig_id_ecoDrive, p + 1, simtime_ecoDrive, &dur_ecoDrive, &max_ecoDrive, &min_ecoDrive); // p is phase ID
 						ph_dur_ecoDrive[p] = dur_ecoDrive;
@@ -857,6 +859,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 		if (int(simtime * 10) % int(Step * dt * 10) == 0) {
 			SigOptFunc(timeSta, Step, dt);
 		}
+		
 		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections);
 	}
 
@@ -867,8 +870,6 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 		// eco-driving 
 		ecoDriveControlSectionOutput();
 		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
-
-		
 	}
 
 	if (control_method == control_strategy[3]) {  // proposed cooperative control
