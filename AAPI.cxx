@@ -273,11 +273,26 @@ int AAPIInit()
 	
 	string line, word;
 	int word_int, row = 0;
+	bool badInput;
 
 	while (getline(ecodrive, line)) {
 		stringstream ss(line);
 		int col = 0;
 		while (getline(ss, word, '	')) {
+			/*try {
+				if (word.empty()) {
+					word_int = stoi(word);
+				}
+				else
+				{
+					throw 505;
+				}
+			}
+			catch(int myNum){
+				badInput = true;
+				cout << "some issue occur!\n";
+
+			}*/
 			word_int = stoi(word);
 			lnk_ctl[row][col] = word_int;
 			col++;
@@ -325,7 +340,7 @@ int AAPIInit()
 	AKIPrintString((to_string(experiment_id)).c_str());
 
 	string output_path;
-	output_path = "results\\" + control_method + "_" + "demand" + to_string(demand_percentage) + "_" + "CAV" +
+	output_path = "D:\\results\\" + control_method + "_" + "demand" + to_string(demand_percentage) + "_" + "CAV" +
 		to_string(cav_penetration) + "_" + to_string(repli_id) + ".csv";
 	fecotraj_output.open(output_path, fstream::out);
 	fecotraj_output << "simulation_time" << "\t" << "section_id" << "\t" << "veh_type_id" << "\t" << "numberLane" << "\t" 
@@ -898,7 +913,7 @@ int AAPIPostManage(double time, double timeSta, double timTrans, double acicle)
 int AAPIFinish()
 {
 	fecotraj_output.close();
-	AKIPrintString("\tFinish");
+	AKIPrintString((control_method + "_" + to_string(demand_percentage) + "_" + to_string(cav_penetration) + "_" + to_string(repli_id) + "is completed!").c_str());
 
 	return 0;
 }

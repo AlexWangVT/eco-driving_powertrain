@@ -1,13 +1,10 @@
 all_scenarios = []
-num_demand_level = 2
-num_cav_penetration = 11
-num_repli = 2
 
 if target != None:
 	scenario = model.getCatalog().find(target.getId())
 	all_scenarios.append(scenario)
 
-	max_per_scenario = num_demand_level * num_cav_penetration * num_repli
+	max_per_scenario = 66
 	all_replications = []
 
 	# collect replications into corresponding dictionaries
