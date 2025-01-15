@@ -191,13 +191,14 @@ void Emission(double spd, double grade, double acc, VehicleType vehicle_type, do
 		// Conventional hybrid vehicle
 		eng[5] = 0;
 		if ((P_i < 0) || (spd < va / 3.6 && P_i < P_hev)) {
-			eng[5] = 0.025 * spd; // FC_ev = 2.5 L/100 km, convert it to ml/s. If necessary, change it to a contant value instead of the function of speed
+			eng[5] = 0.00008914 * 3785.4; // FC_ev = 2.5 L/100 km, convert it to ml/s. If necessary, change it to a contant value instead of the function of speed
 		}
 		else {
 			if ((P_i > 0 && spd > va / 3.6) || (spd < va / 3.6 && P_i >= P_hev)) {
-				eng[5] = 0.06 + 0.003998 * spd * 3.6 + 0.077092 * P_i - 0.00009155 * pow(P_i, 2);
+				eng[5] = 0.006 + 0.003998 * spd * 3.6 + 0.077092 * P_i - 0.00009155 * pow(P_i, 2);  // unit in ml/s
 			}
 		}
+		//eng[5] = eng[5] / 1000; // unit in L/s
 		break;
 	}
 
@@ -340,7 +341,7 @@ int AAPIInit()
 	AKIPrintString((to_string(experiment_id)).c_str());
 
 	string output_path;
-	output_path = "D:\\results\\" + control_method + "_" + "demand" + to_string(demand_percentage) + "_" + "CAV" +
+	output_path = "D:\\projects\\eco-driving_powertrainOpt\\original network\\results\\" + control_method + "_" + "demand" + to_string(demand_percentage) + "_" + "CAV" +
 		to_string(cav_penetration) + "_" + to_string(repli_id) + ".csv";
 	fecotraj_output.open(output_path, fstream::out);
 	fecotraj_output << "simulation_time" << "\t" << "section_id" << "\t" << "veh_type_id" << "\t" << "numberLane" << "\t" 
@@ -365,7 +366,7 @@ int EcoDriveFunc(VehicleType vehicle_type, double d2t, double d2a, double ttg, d
 	double ta2, ta3, dd2;
 	double grade = 0.0;
 
-	flag2 = 0; // indicate if eco-drive is successfully applied to control the vehicle, 1 is controled, 0 is not, innitial value is 0
+	flag2 = 0; // indicate if eco-drive is successfully applied to control the vehicle, 1 is controled, 0 is not, initial value is 0
 	for (int i = 0; i<int(spd_limit); i++) { 
 		flag1 = 0;
 		if (i < spd_cur) {
@@ -393,7 +394,7 @@ int EcoDriveFunc(VehicleType vehicle_type, double d2t, double d2a, double ttg, d
 				eng_tot += eng_ice;
 			}
 			
-			for (int k = 0; k < 30; k++) {
+			for (int k = 0; k < 30; k++) { // using 30 because we assume acceleration ranges between 0 and 3
 				
 				acc2 = k * 0.1;									// acceleration rate
 				ta2 = (spd_limit - spd_cruise) / 3.6 / acc2;	// acceleration time to speed limit
@@ -608,6 +609,10 @@ void withoutEcodrive_trajectory_output(double simtime, string control_method, in
 	double ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy;
 	for (int j = 0; j < lnk_eco; j++) {
 		if (int(j % numDownstreamSections) == 0 && (control_method == control_strategy[0] || control_method == control_strategy[1])) {
+			/*
+			int(j % numDownstreamSections) == 0 ensures that
+			section_from only needs to output trajectory once even though we have multiple downstream sections with regard to this origin section
+			*/
 			sec_from = lnk_ctl[j][0];
 			/*AKIPrintString(("control section is: " + to_string(sec_from)).c_str());*/
 			int nbveh_upstream_section = AKIVehStateGetNbVehiclesSection(sec_from, true);
@@ -656,6 +661,12 @@ void ecoDriveControlSectionOutput() {
 	double ph_dur_ecoDrive[8]; // there are a total of 4 phases, why use 8? ph_dur refers to phase duration
 	double grade_ecoDrive = 0.0;
 	double ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy;
+
+	/*
+	The major logic of this section indicates under what circumstances a vehicle should be controled by the CACC system:
+	control section -> control vehicle (CAV) -> control phase -> CAV stay on the correct lane (the CAV to be controlled has to stay on the lane
+	which is controlled by the matched signal phase)
+	*/
 
 	int secnb = AKIInfNetNbSectionsANG();
 	for (int i = 0; i < secnb; i++) {
@@ -734,8 +745,8 @@ void ecoDriveControlSectionOutput() {
 						ttr_ecoDrive = ph_dur_ecoDrive[ph_veh_ecoDrive - 1] - (simtime_ecoDrive - ph_start_ecoDrive); // time to red
 						ttg_ecoDrive = ttr_ecoDrive + sig_cycle_ecoDrive - ph_dur_ecoDrive[ph_veh_ecoDrive - 1]; // time to green refers to the time to next green from the current green
 					}
-					else {
-						if (ph_veh_ecoDrive > ph_cur_ecoDrive) {
+					else { // arrive during red
+						if (ph_veh_ecoDrive > ph_cur_ecoDrive) { // arrive during red and the controlled phase does not pass in this cycle
 							ttg_ecoDrive = 0;
 							for (int ph = ph_cur_ecoDrive; ph < ph_veh_ecoDrive; ph++) {
 								ttg_ecoDrive += ph_dur_ecoDrive[ph - 1];
@@ -743,7 +754,7 @@ void ecoDriveControlSectionOutput() {
 							ttg_ecoDrive = ttg_ecoDrive - (simtime_ecoDrive - ph_start_ecoDrive);
 							ttr_ecoDrive = ttg_ecoDrive + ph_dur_ecoDrive[ph_veh_ecoDrive - 1];
 						}
-						else {
+						else { // arrive during red and the controlled phase has already passed in this cycle and need to wait until next green
 							ttg_ecoDrive = 0;
 							for (int ph = ph_cur_ecoDrive; ph <= ECIGetNbPhasesofJunction(0, sig_id_ecoDrive); ph++) {
 								ttg_ecoDrive += ph_dur_ecoDrive[ph - 1];
@@ -759,7 +770,7 @@ void ecoDriveControlSectionOutput() {
 					// apply eco-driving for the CAV
 					// apply it when the current phase is red first
 					// when the current phase is green but vehicle cannot get through the junction if not speeding?
-					if (ph_veh_ecoDrive != ph_cur_ecoDrive) {
+					if (ph_veh_ecoDrive != ph_cur_ecoDrive) { // arrive on red
 						AKIVehSetAsTracked(vehinf.idVeh);
 
 						// control the speed of CVs
@@ -769,7 +780,7 @@ void ecoDriveControlSectionOutput() {
 							ttg0_ecoDrive = ttg_ecoDrive + (vn_lan_ecoDrive[vehinf.numberLane - 1] - 1) * vlen_ecoDrive / (spd_wave_ecoDrive / 3.6);		// time until the queue is released
 							d2a_ecoDrive = (vn_lan_ecoDrive[vehinf.numberLane - 1] * vlen_ecoDrive) + 100; // 100 is arbitrarily set, assuming vehicle would be able to accelerate back to speed limit within 100m
 						}
-						else { // update the input of eco-driving for traffic flow-based queue
+						else { // update the input of eco-driving for traffic flow-based queue model
 							ttg1_ecoDrive = (sig_cycle_ecoDrive - ph_dur_ecoDrive[ph_cur_ecoDrive - 1]) - ttg_ecoDrive; // ttg1 refers to how much red time has been through for the control phase
 							ttg1_ecoDrive += vehinf.distance2End / (secinf.speedLimit / 3.6); // ?? queue formation (wait for manual figure)
 							d2t_ecoDrive = flw_lan_ecoDrive[vehinf.numberLane - 1] * ttg1_ecoDrive / 3600 * vlen_ecoDrive; // d2t here refers to queue length during red
@@ -783,7 +794,7 @@ void ecoDriveControlSectionOutput() {
 							if (flag > 0) {
 								if (spd_opt_ecoDrive < vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6) spd_opt_ecoDrive = vehinf.CurrentSpeed - acc_opt1_ecoDrive * tstep_ecoDrive * 3.6;
 
-								if (flg_lane_ecoDrive == 0) {
+								if (flg_lane_ecoDrive == 0) { // flg_lane_ecoDrive == 0 means the CAV stays on the correct lane
 									AKIVehTrackedModifySpeed(vehinf.idVeh, spd_opt_ecoDrive);			// if a CAV is on a wrong lane, then we do not apply eco-driving. We do not control anything to this vehicle 
 								}
 								
