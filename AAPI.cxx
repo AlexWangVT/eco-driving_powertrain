@@ -344,10 +344,9 @@ int AAPIInit()
 	output_path = "D:\\projects\\eco-driving_powertrainOpt\\original network\\results\\" + control_method + "_" + "demand" + to_string(demand_percentage) + "_" + "CAV" +
 		to_string(cav_penetration) + "_" + to_string(repli_id) + ".csv";
 	fecotraj_output.open(output_path, fstream::out);
-	fecotraj_output << "simulation_time" << "\t" << "section_id" << "\t" << "veh_type_id" << "\t" << "numberLane" << "\t" 
-		<< "vehicle_id" << "\t" << "distance2End" << "\t" << "CurrentSpeed" << "\t" << "acceleration" << "\t" << "driving_distance" <<
+	fecotraj_output << "simulation_time" << "\t" << "section_id" << "\t" << "veh_type_id" << "\t" << "numberLane" << "\t"
+		<< "vehicle_id" << "\t" << "distance2End" << "\t" << "currentPosition" << "\t" << "CurrentSpeed" << "\t" << "acceleration" << "\t" << "driving_distance" <<
 		"\t" << "ICEV_fuel" << "\t" << "BEV_energy" << "\t" << "PHEV_electric_power" << "\t" << "PHEV_fuel" << "\t" << "HFCV_energy" << "\t" << "hev_fuel" << std::endl;
-	
 	return 0;
 }
 
@@ -607,40 +606,56 @@ void withoutEcodrive_trajectory_output(double simtime, string control_method, in
 	
 	double tstep = 0.8, grade = 0.0;
 	double ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy;
-	for (int j = 0; j < lnk_eco; j++) {
-		if (int(j % numDownstreamSections) == 0 && (control_method == control_strategy[0] || control_method == control_strategy[1])) {
-			/*
-			int(j % numDownstreamSections) == 0 ensures that
-			section_from only needs to output trajectory once even though we have multiple downstream sections with regard to this origin section
-			*/
-			sec_from = lnk_ctl[j][0];
-			/*AKIPrintString(("control section is: " + to_string(sec_from)).c_str());*/
-			int nbveh_upstream_section = AKIVehStateGetNbVehiclesSection(sec_from, true);
-			for (int veh_num = 0; veh_num < nbveh_upstream_section; veh_num++) {
-				InfVeh vehinf_upstream = AKIVehStateGetVehicleInfSection(sec_from, veh_num);
-				VehicleType type_id_upstream = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf_upstream.type));
-				double vehicle_acc = (vehinf_upstream.CurrentSpeed - vehinf_upstream.PreviousSpeed) / (3.6 * tstep);
-				double distance_by_tstep = vehinf_upstream.PreviousSpeed / 3.6 * tstep / 1000; // in unit of km
-				Emission(vehinf_upstream.CurrentSpeed, grade, vehicle_acc, type_id_upstream, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
-				int type_id_output = AKIVehTypeGetIdVehTypeANG(vehinf_upstream.type); // VehicleType class cannot be output, so should convert to int
-				fecotraj_output << simtime << "\t" << sec_from << "\t" << type_id_output << "\t" << vehinf_upstream.numberLane << "\t" << vehinf_upstream.idVeh << "\t" << vehinf_upstream.distance2End
-					<< "\t" << vehinf_upstream.CurrentSpeed << "\t" << vehicle_acc << "\t" << distance_by_tstep << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t"
-					<< hfcv_energy << "\t" << hev_energy << std::endl;
-			} 
-		}
-		int sec_to = lnk_ctl[j][1];
-		int nbveh_downstream_section = AKIVehStateGetNbVehiclesSection(sec_to, true);
-		//AKIPrintString(("downstream section is: " + to_string(sec_to)).c_str());
-		for (int veh_num = 0; veh_num < nbveh_downstream_section; veh_num++) {
-			InfVeh vehinf_downstream = AKIVehStateGetVehicleInfSection(sec_to, veh_num);
-			VehicleType type_id_downstream = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type));
-			double vehicle_acc = (vehinf_downstream.CurrentSpeed - vehinf_downstream.PreviousSpeed) / (3.6 * tstep);
-			double distance_by_tstep = vehinf_downstream.PreviousSpeed / 3.6 * tstep; // in unit of m
-			Emission(vehinf_downstream.CurrentSpeed, grade, vehicle_acc, type_id_downstream, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
-			int type_id_output = AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type); // VehicleType class cannot be output, so should convert to int
-			fecotraj_output << simtime << "\t" << sec_to << "\t" << type_id_output << "\t" << vehinf_downstream.numberLane << "\t" << vehinf_downstream.idVeh << "\t" << vehinf_downstream.CurrentPos
-				<< "\t" << vehinf_downstream.CurrentSpeed << "\t" << vehicle_acc << "\t" << distance_by_tstep << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t"
-				<< hfcv_energy << "\t" << hev_energy << std::endl;
+	/* if only output results for the sections in the "ecodrive.txt" file, run the following script, otherwise run the uncommented code*/
+	//for (int j = 0; j < lnk_eco; j++) {
+	//	if (int(j % numDownstreamSections) == 0 && (control_method == control_strategy[0] || control_method == control_strategy[1])) {
+	//		/*
+	//		int(j % numDownstreamSections) == 0 ensures that
+	//		section_from only needs to output trajectory once even though we have multiple downstream sections with regard to this origin section
+	//		*/
+	//		sec_from = lnk_ctl[j][0];
+	//		/*AKIPrintString(("control section is: " + to_string(sec_from)).c_str());*/
+	//		int nbveh_upstream_section = AKIVehStateGetNbVehiclesSection(sec_from, true);
+	//		for (int veh_num = 0; veh_num < nbveh_upstream_section; veh_num++) {
+	//			InfVeh vehinf_upstream = AKIVehStateGetVehicleInfSection(sec_from, veh_num);
+	//			VehicleType type_id_upstream = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf_upstream.type));
+	//			double vehicle_acc = (vehinf_upstream.CurrentSpeed - vehinf_upstream.PreviousSpeed) / (3.6 * tstep);
+	//			double distance_by_tstep = vehinf_upstream.PreviousSpeed / 3.6 * tstep / 1000; // in unit of km
+	//			Emission(vehinf_upstream.CurrentSpeed, grade, vehicle_acc, type_id_upstream, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
+	//			int type_id_output = AKIVehTypeGetIdVehTypeANG(vehinf_upstream.type); // VehicleType class cannot be output, so should convert to int
+	//			fecotraj_output << simtime << "\t" << sec_from << "\t" << type_id_output << "\t" << vehinf_upstream.numberLane << "\t" << vehinf_upstream.idVeh << "\t" << vehinf_upstream.distance2End
+	//				<< "\t" << vehinf_upstream.CurrentSpeed << "\t" << vehicle_acc << "\t" << distance_by_tstep << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t"
+	//				<< hfcv_energy << "\t" << hev_energy << std::endl;
+	//		} 
+	//	}
+	//	int sec_to = lnk_ctl[j][1];
+	//	int nbveh_downstream_section = AKIVehStateGetNbVehiclesSection(sec_to, true);
+	//	//AKIPrintString(("downstream section is: " + to_string(sec_to)).c_str());
+	//	for (int veh_num = 0; veh_num < nbveh_downstream_section; veh_num++) {
+	//		InfVeh vehinf_downstream = AKIVehStateGetVehicleInfSection(sec_to, veh_num);
+	//		VehicleType type_id_downstream = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type));
+	//		double vehicle_acc = (vehinf_downstream.CurrentSpeed - vehinf_downstream.PreviousSpeed) / (3.6 * tstep);
+	//		double distance_by_tstep = vehinf_downstream.PreviousSpeed / 3.6 * tstep / 1000; // in unit of km
+	//		Emission(vehinf_downstream.CurrentSpeed, grade, vehicle_acc, type_id_downstream, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
+	//		int type_id_output = AKIVehTypeGetIdVehTypeANG(vehinf_downstream.type); // VehicleType class cannot be output, so should convert to int
+	//		fecotraj_output << simtime << "\t" << sec_to << "\t" << type_id_output << "\t" << vehinf_downstream.numberLane << "\t" << vehinf_downstream.idVeh << "\t" << vehinf.distance2End << "\t" << vehinf_downstream.CurrentPos
+	//			<< "\t" << vehinf_downstream.CurrentSpeed << "\t" << vehicle_acc << "\t" << distance_by_tstep << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t"
+	//			<< hfcv_energy << "\t" << hev_energy << std::endl;
+	//	}
+	//}
+	int secnb = AKIInfNetNbSectionsANG();
+	for (int i = 0; i < secnb; i++) {
+		int secid = AKIInfNetGetSectionANGId(i);
+		int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
+		for (int k = 0; k < nbveh; k++) {
+			InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, k);
+			VehicleType type_id = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf.type));
+			double vehicle_acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * tstep);
+			double distance_by_tstep = vehinf.PreviousSpeed / 3.6 * tstep / 1000; // in unit of km
+			Emission(vehinf.CurrentSpeed, grade, vehicle_acc, type_id, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
+			int type_id_output = AKIVehTypeGetIdVehTypeANG(vehinf.type); // VehicleType class cannot be output, so should convert to int
+			fecotraj_output << simtime << "\t" << secid << "\t" << type_id_output << "\t" << vehinf.numberLane << "\t" << vehinf.idVeh << "\t" << vehinf.distance2End << "\t" << vehinf.CurrentPos
+				<< "\t" << vehinf.CurrentSpeed << "\t" << vehicle_acc << "\t" << distance_by_tstep << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t" << hfcv_energy << "\t" << hev_energy << std::endl;
 		}
 	}
 } // this func used to output trajectory for control strategy "no control" and "signal opt", and trajectory of downstream section for strategies with ecodrive
@@ -661,7 +676,7 @@ void ecoDriveControlSectionOutput() {
 	double ph_dur_ecoDrive[8]; // there are a total of 4 phases, why use 8? ph_dur refers to phase duration
 	double grade_ecoDrive = 0.0;
 	double ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy;
-
+	
 	/*
 	The major logic of this section indicates under what circumstances a vehicle should be controled by the CACC system:
 	control section -> control vehicle (CAV) -> control phase -> CAV stay on the correct lane (the CAV to be controlled has to stay on the lane
@@ -849,11 +864,25 @@ void ecoDriveControlSectionOutput() {
 				Emission(vehinf.CurrentSpeed, grade_ecoDrive, vehicle_acc, type_id, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
 				int vehicle_type_output = AKIVehTypeGetIdVehTypeANG(vehinf.type);
 				// save eco-driving vehicle trajectory: time, section ID, vehicle type, lane ID, vehicle ID, distance to signal, current speed
-				fecotraj_output << simtime_ecoDrive << "\t" << secid << "\t" << vehicle_type_output << "\t" << vehinf.numberLane << "\t" << vehinf.idVeh << "\t" << vehinf.distance2End << "\t" << vehinf.CurrentSpeed << "\t" <<
-					vehicle_acc << "\t" << distance << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t" << hfcv_energy << "\t" << hev_energy << std::endl;
+				fecotraj_output << simtime_ecoDrive << "\t" << secid << "\t" << vehicle_type_output << "\t" << vehinf.numberLane << "\t" << vehinf.idVeh << "\t" << vehinf.distance2End << "\t" << vehinf.CurrentPos << "\t" << 
+					vehinf.CurrentSpeed << "\t" << vehicle_acc << "\t" << distance << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t" << hfcv_energy << "\t" << hev_energy << std::endl;
 				//AKIPrintString(("type_id is: " + to_string(type_id) + "\n" + "vehicle_id is: " + to_string(vehinf.idVeh) + "\n" + "speed is: " + to_string(vehinf.CurrentSpeed)).c_str());
 			}
 		}
+		else { /*if non-control section, run the following code to output results. We output all vehicles in all sections.*/
+				int nbveh = AKIVehStateGetNbVehiclesSection(secid, true);
+				for (int vehicle_idx = 0; vehicle_idx < nbveh; vehicle_idx++) {
+					InfVeh vehinf = AKIVehStateGetVehicleInfSection(secid, vehicle_idx);
+					VehicleType type_id = static_cast<VehicleType>(AKIVehTypeGetIdVehTypeANG(vehinf.type));
+					double vehicle_acc = (vehinf.CurrentSpeed - vehinf.PreviousSpeed) / (3.6 * tstep_ecoDrive);
+					double distance_by_tstep = vehinf.PreviousSpeed / 3.6 * tstep_ecoDrive / 1000; // in unit of km
+					Emission(vehinf.CurrentSpeed, tstep_ecoDrive, vehicle_acc, type_id, ice_energy, bev_energy, phev1_energy, phev2_energy, hfcv_energy, hev_energy);
+					int type_id_output = AKIVehTypeGetIdVehTypeANG(vehinf.type); // VehicleType class cannot be output, so should convert to int
+					fecotraj_output << simtime_ecoDrive << "\t" << secid << "\t" << type_id_output << "\t" << vehinf.numberLane << "\t" << vehinf.idVeh << "\t" << vehinf.distance2End << "\t" << vehinf.CurrentPos << "\t" << 
+						vehinf.CurrentSpeed << "\t" << vehicle_acc << "\t" << distance_by_tstep << "\t" << ice_energy << "\t" << bev_energy << "\t" << phev1_energy << "\t" << phev2_energy << "\t" << hfcv_energy << "\t" << 
+						hev_energy << std::endl;
+				}
+			}
 	}
 }// this func used to develop eco-drive control and output trajectroy on control sections
 
@@ -895,7 +924,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 
 		// eco-driving 
 		ecoDriveControlSectionOutput();
-		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
+		//withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
 	}
 
 	if (control_method == control_strategy[3]) {  // proposed cooperative control
@@ -909,7 +938,7 @@ int AAPIManage(double time, double timeSta, double timTrans, double cycle) // AA
 		ecoDriveControlSectionOutput();
 
 		// output vehicle trajectory in downwtream sections of the control section
-		withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
+		//withoutEcodrive_trajectory_output(simtime, control_method, sec_from, numDownstreamSections); // For this control strategy, this func only outputs downstream trajectory, upstream trajecotry is output later
 	}
 
 	return 0;

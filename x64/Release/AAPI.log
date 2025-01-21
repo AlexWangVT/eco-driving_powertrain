@@ -5,29 +5,29 @@ D:\projects\eco-driving_powertrainOpt\AAPI.cxx(112,73): warning C4101: 'FC_hev':
 D:\projects\eco-driving_powertrainOpt\AAPI.cxx(218,6): warning C4101: 'ngrp': unreferenced local variable
 D:\projects\eco-driving_powertrainOpt\AAPI.cxx(219,6): warning C4101: 'grp_id': unreferenced local variable
 D:\projects\eco-driving_powertrainOpt\AAPI.cxx(277,7): warning C4101: 'badInput': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(499,6): warning C4101: 'ngrp': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(499,12): warning C4101: 'nturn': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(734,36): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(864,14): warning C4101: 'ttg0': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(865,9): warning C4101: 'max': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(862,25): warning C4101: 'ph_cur': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(862,6): warning C4101: 'offset': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(864,26): warning C4101: 'dtg1': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(864,20): warning C4101: 'ttg1': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(863,6): warning C4101: 'vn_lan': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(862,14): warning C4101: 'sig_cycle': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(866,66): warning C4101: 'spd_pre': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(865,14): warning C4101: 'min': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(864,32): warning C4101: 'ttr': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(865,19): warning C4101: 'dur': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(867,31): warning C4101: 'flw_lan': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(866,56): warning C4101: 'spd_wave': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(864,37): warning C4101: 'ph_start': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(868,21): warning C4101: 'd2t': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(867,20): warning C4101: 't0_lan': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(867,9): warning C4101: 'ta_lan': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(868,26): warning C4101: 'd2a': unreferenced local variable
-D:\projects\eco-driving_powertrainOpt\AAPI.cxx(864,9): warning C4101: 'ttg': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(498,6): warning C4101: 'ngrp': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(498,12): warning C4101: 'nturn': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(749,36): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(893,14): warning C4101: 'ttg0': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(894,9): warning C4101: 'max': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(891,25): warning C4101: 'ph_cur': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(891,6): warning C4101: 'offset': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(893,26): warning C4101: 'dtg1': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(893,20): warning C4101: 'ttg1': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(892,6): warning C4101: 'vn_lan': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(891,14): warning C4101: 'sig_cycle': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(895,66): warning C4101: 'spd_pre': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(894,14): warning C4101: 'min': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(893,32): warning C4101: 'ttr': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(894,19): warning C4101: 'dur': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(896,31): warning C4101: 'flw_lan': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(895,56): warning C4101: 'spd_wave': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(893,37): warning C4101: 'ph_start': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(897,21): warning C4101: 'd2t': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(896,20): warning C4101: 't0_lan': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(896,9): warning C4101: 'ta_lan': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(897,26): warning C4101: 'd2a': unreferenced local variable
+D:\projects\eco-driving_powertrainOpt\AAPI.cxx(893,9): warning C4101: 'ttg': unreferenced local variable
 D:\projects\eco-driving_powertrainOpt\AAPI.cxx(164,1): warning C4700: uninitialized local variable 'P_w' used
 D:\projects\eco-driving_powertrainOpt\AAPI.cxx(193,1): warning C4700: uninitialized local variable 'P_i' used
 C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\Microsoft.CppBuild.targets(1392,5): warning MSB8012: TargetPath(D:\projects\eco-driving_powertrainOpt\x64\Release\AAPI.dll) does not match the Linker's OutputFile property value (D:\projects\eco-driving_powertrainOpt\AAPI_R.dll). This may cause your project to build incorrectly. To correct this, please make sure that $(OutDir), $(TargetName) and $(TargetExt) property values match the value specified in %(Link.OutputFile).
