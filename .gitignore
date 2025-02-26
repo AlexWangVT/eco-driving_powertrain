@@ -1,4 +1,20 @@
 .vs/
+.venv/
+Aimsun debug/
+backup_API/
+Debug/
+eco-driving_Aimsun_APIFixed (just for reference)/
+eco-driving_powertrainOpt - hao yang/
+literature/
+Release/
+x64/
 *.csv
 *.txt
 .Rproj.user
+original_network/network_separate/
+original_network/R_lib/
+original_network/backup_network/
+original_network/results/
+original_network/error_check/
+original_network/*.txt
+original_network/*.csv
